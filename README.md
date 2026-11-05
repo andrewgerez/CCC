@@ -11,6 +11,7 @@ Linux only for now (Tauri 2 + React + Rust, sandboxed with Landlock). The UI is 
 - **Approvals in the app**: when Claude asks to edit or run something, you approve or deny it from the card or the side panel.
 - **Auto / Ask**: per session, let Claude Code's auto mode handle routine actions or ask before acting. You can switch it while a session runs.
 - **MCP connections per account**: add or remove MCP servers (local command or URL) for each account from the plug icon.
+- **Behaviour folder per account**: point each account at a folder of skills (`.claude/skills/*`) and a `CLAUDE.md`; every session of that account loads them (read-only in the sandbox). If the folder is a Claude Code plugin (`.claude-plugin/plugin.json`), its agents, commands and hooks load too.
 - **Side panel**: chat, agents, tools, changed files, logs and approvals for a session; resizable, with adjustable text size.
 
 ## Requirements
@@ -55,6 +56,7 @@ Then open **Configurações** (gear icon) and set, per account:
 | Workspace (where your repos live) | `~/work` / `~/personal` (or the same folder under `~/Desktop`) |
 | Config dir (`CLAUDE_CONFIG_DIR`) | `~/.claude-work` / `~/.claude-personal` |
 | Expected email | empty until the first login links it |
+| Behaviour folder | none (skills / CLAUDE.md / plugin shared by all sessions of the account) |
 
 Workspaces and config dirs of the two accounts must not overlap; the app refuses configs that would let one account see the other's files.
 

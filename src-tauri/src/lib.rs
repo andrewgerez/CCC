@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod auth;
+pub mod behavior;
 pub mod commands;
 pub mod db;
 pub mod emitter;
@@ -104,6 +105,7 @@ pub fn run() {
             commands::mcp_login_input,
             commands::mcp_login_cancel,
             commands::open_external,
+            commands::inspect_behavior_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

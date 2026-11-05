@@ -55,6 +55,7 @@ pub fn build_policy(i: &PolicyInputs) -> AppResult<Policy> {
     }
     read.push(i.claude_install_dir.to_path_buf());
     read.extend(i.account.extra_read_paths.iter().cloned());
+    read.extend(i.account.behavior_dir.iter().filter(|p| p.is_dir()).cloned());
 
     let mut write: Vec<PathBuf> = vec![
         PathBuf::from("/dev"),

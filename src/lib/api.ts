@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  AccountConfig, AccountId, ApprovalDecision, AuthStatus, ChatItem, ExternalSession, McpServer, MetricsSnapshot,
+  AccountConfig, AccountId, ApprovalDecision, BehaviorInfo, AuthStatus, ChatItem, ExternalSession, McpServer, MetricsSnapshot,
   NewSession, PermissionMode, Overview, Project, RepoInfo, RepoStatus, SessionDetail, SessionSummary, Settings, TaskItem,
 } from "./contract";
 
@@ -66,4 +66,5 @@ export const api = {
   mcpLoginInput: (account: AccountId, name: string, text: string) => invoke<void>("mcp_login_input", { account, name, text }),
   mcpLoginCancel: (account: AccountId, name: string) => invoke<void>("mcp_login_cancel", { account, name }),
   openExternal: (url: string) => invoke<void>("open_external", { url }),
+  inspectBehaviorDir: (path: string) => invoke<BehaviorInfo>("inspect_behavior_dir", { path }),
 };

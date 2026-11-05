@@ -78,6 +78,10 @@ pub struct AccountConfig {
     pub default_model: Option<String>,
     #[serde(default)]
     pub default_permission_mode: PermissionMode,
+    /// Folder with skills (`.claude/skills`), a CLAUDE.md and optionally a plugin manifest that
+    /// every session of this account loads. Read-only inside the sandbox.
+    #[serde(default)]
+    pub behavior_dir: Option<PathBuf>,
 }
 
 fn pick_workspace(home: &Path, name: &str) -> PathBuf {
@@ -108,6 +112,7 @@ pub fn default_accounts(home: &Path) -> Vec<AccountConfig> {
             extra_write_paths: vec![],
             default_model: None,
             default_permission_mode: PermissionMode::Auto,
+            behavior_dir: None,
         },
         AccountConfig {
             id: AccountId::Work,
@@ -119,6 +124,7 @@ pub fn default_accounts(home: &Path) -> Vec<AccountConfig> {
             extra_write_paths: vec![],
             default_model: None,
             default_permission_mode: PermissionMode::Auto,
+            behavior_dir: None,
         },
     ]
 }
@@ -159,7 +165,7 @@ pub fn validate_pair(accounts: &[AccountConfig], home: &Path) -> AppResult<Vec<S
                 a.id.as_str()
             ));
         }
-        for p in a.extra_read_paths.iter().chain(a.extra_write_paths.iter()) {
+        for p in a.extra_read_paths.iter().chain(a.extra_write_paths.iter()).chain(a.behavior_dir.iter()) {
             let n = paths::normalize(p);
             if n == home_n || n == Path::new("/") || home_n.starts_with(&n) {
                 return Err(AppError::Isolation(format!("{}: extra path {} is too broad", a.id.as_str(), n.display())));
@@ -173,6 +179,7 @@ pub fn validate_pair(accounts: &[AccountConfig], home: &Path) -> AppResult<Vec<S
             .into_iter()
             .chain(x.extra_read_paths.iter().map(|p| paths::normalize(p)))
             .chain(x.extra_write_paths.iter().map(|p| paths::normalize(p)))
+            .chain(x.behavior_dir.iter().map(|p| paths::normalize(p)))
             .collect();
         for m in &mine {
             for t in &theirs {
@@ -213,6 +220,19 @@ mod tests {
     fn defaults_are_valid() {
         let t = tempfile::tempdir().unwrap();
         assert!(validate_pair(&mk(t.path()), t.path()).is_ok());
+    }
+    #[test]
+    fn behavior_dir_cannot_expose_the_other_account() {
+        let t = tempfile::tempdir().unwrap();
+        let mut v = mk(t.path());
+        let shared = t.path().join("brains/work");
+        std::fs::create_dir_all(&shared).unwrap();
+        v[1].behavior_dir = Some(shared);
+        assert!(validate_pair(&v, t.path()).is_ok());
+        v[1].behavior_dir = Some(v[0].workspace_root.join("skills"));
+        assert!(matches!(validate_pair(&v, t.path()), Err(AppError::Isolation(_))));
+        v[1].behavior_dir = Some(t.path().to_path_buf());
+        assert!(validate_pair(&v, t.path()).is_err());
     }
     #[test]
     fn unlinked_emails_are_allowed_but_malformed_are_not() {

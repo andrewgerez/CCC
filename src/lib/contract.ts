@@ -116,6 +116,8 @@ export interface AccountConfig {
   extraWritePaths: string[];
   defaultModel: string | null;
   defaultPermissionMode: PermissionMode;
+  /** Folder with skills / CLAUDE.md / plugin loaded by every session of the account. */
+  behaviorDir?: string | null;
 }
 
 export interface Settings {
@@ -190,6 +192,8 @@ export type UiEvent =
 
 /** User-scope MCP server of one account. Secret values never reach the UI, only their names. */
 export interface McpServer { name: string; transport: "stdio" | "http" | "sse" | "ws"; target: string; secrets: string[] }
+
+export interface BehaviorInfo { exists: boolean; skills: string[]; hasClaudeMd: boolean; isPlugin: boolean; agents: number; commands: number }
 
 export const EVENTS_CHANNEL = "ccc://events";
 

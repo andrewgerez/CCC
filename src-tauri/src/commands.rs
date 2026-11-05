@@ -828,3 +828,12 @@ pub fn open_external(url: String) -> AppResult<()> {
     open_in_browser(&url);
     Ok(())
 }
+
+/// What a candidate behaviour folder would contribute (skills, CLAUDE.md, plugin parts).
+#[tauri::command]
+pub fn inspect_behavior_dir(path: String) -> AppResult<crate::behavior::BehaviorInfo> {
+    if path.trim().is_empty() || path.contains('\0') {
+        return Err(AppError::Invalid("caminho inválido".into()));
+    }
+    Ok(crate::behavior::inspect(Path::new(path.trim())))
+}

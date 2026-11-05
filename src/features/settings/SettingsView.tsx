@@ -1,11 +1,12 @@
-import { AlertTriangle, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, FolderOpen, Save, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
 import { Input, Label, Select, Textarea } from "../../components/ui/input";
 import { SectionTitle } from "../../components/ui/status";
 import { api } from "../../lib/api";
-import type { AccountConfig, PermissionMode, Settings } from "../../lib/contract";
+import type { AccountConfig, BehaviorInfo, PermissionMode, Settings } from "../../lib/contract";
+import { pickDirectories } from "../../lib/dialogs";
 import { ACCOUNT_LABEL, cn, errMessage } from "../../lib/utils";
 import { useData } from "../../store/data";
 import { PermissionOptions } from "../shell/NewSessionDialog";
@@ -97,6 +98,44 @@ function GeneralSettings({ initial }: { initial: Settings }) {
 
 const lines = (v: string) => v.split("\n").map((x) => x.trim()).filter(Boolean);
 
+/** Folder of skills / CLAUDE.md / plugin that every session of the account loads. */
+function BehaviorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [info, setInfo] = useState<BehaviorInfo | null>(null);
+  useEffect(() => {
+    if (!value.trim()) { setInfo(null); return; }
+    let alive = true;
+    const t = setTimeout(() => { api.inspectBehaviorDir(value.trim()).then((i) => alive && setInfo(i)).catch(() => alive && setInfo(null)); }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [value]);
+  const pick = async () => {
+    const [dir] = await pickDirectories(value || undefined, { multiple: false, title: "Pasta de comportamento (skills e CLAUDE.md)" });
+    if (dir) onChange(dir);
+  };
+  return (
+    <div className="col-span-2">
+      <Label>Pasta de comportamento <span className="font-normal text-dim">(skills, CLAUDE.md, plugin — carregada em todas as sessões desta conta)</span></Label>
+      <div className="flex gap-2">
+        <Input className="flex-1 font-mono text-xs" value={value} onChange={(e) => onChange(e.target.value)} placeholder="nenhuma" />
+        <Button size="md" variant="secondary" onClick={() => void pick()}><FolderOpen /> Escolher</Button>
+        {value && <Button size="md" variant="ghost" aria-label="Remover pasta" onClick={() => onChange("")}><X /></Button>}
+      </div>
+      {value && info && (
+        info.exists ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
+            {info.skills.length > 0
+              ? info.skills.map((s) => <span key={s} className="rounded-full bg-surface-3 px-2 py-0.5 font-mono text-fg-2">/{s}</span>)
+              : <span>nenhuma skill em .claude/skills</span>}
+            <span>· CLAUDE.md {info.hasClaudeMd ? "✓" : "—"}</span>
+            {info.isPlugin
+              ? <span>· plugin: {info.agents} agentes, {info.commands} comandos</span>
+              : (info.agents > 0 || info.commands > 0) && <span className="text-amber">· {info.agents} agentes e {info.commands} comandos só carregam se a pasta for um plugin (.claude-plugin/plugin.json)</span>}
+          </div>
+        ) : <div className="mt-1.5 text-[11.5px] text-amber">Pasta não encontrada.</div>
+      )}
+    </div>
+  );
+}
+
 function AccountEditor({ initial, warnings }: { initial: AccountConfig; warnings: string[] }) {
   const [c, setC] = useState(initial);
   const [read, setRead] = useState(initial.extraReadPaths.join("\n"));
@@ -120,6 +159,7 @@ function AccountEditor({ initial, warnings }: { initial: AccountConfig; warnings
         <div><Label>Nome</Label><Input value={c.label} onChange={f("label")} /></div>
         <div><Label>Email esperado</Label><Input value={c.email} onChange={f("email")} placeholder="vazio: vincula no primeiro login" /></div>
         <div><Label>Workspace</Label><Input className="font-mono text-xs" value={c.workspaceRoot} onChange={f("workspaceRoot")} /></div>
+        <BehaviorField value={c.behaviorDir ?? ""} onChange={(v) => setC({ ...c, behaviorDir: v || null })} />
         <div><Label>Diretório de configuração (CLAUDE_CONFIG_DIR)</Label><Input className="font-mono text-xs" value={c.configDir} onChange={f("configDir")} /></div>
         <div><Label>Leitura extra no sandbox (1 por linha)</Label><Textarea rows={4} className="font-mono text-xs" value={read} onChange={(e) => setRead(e.target.value)} /></div>
         <div><Label>Escrita extra no sandbox (1 por linha)</Label><Textarea rows={4} className="font-mono text-xs" value={write} onChange={(e) => setWrite(e.target.value)} /></div>

@@ -67,6 +67,12 @@ function AccountLine({ account }: { account: AccountId }) {
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted">
       {view?.config.workspaceRoot && <span className="font-mono">{view.config.workspaceRoot.replace(/^\/home\/[^/]+/, "~")}</span>}
+      {view?.config.behaviorDir && (
+        <>
+          <span>·</span>
+          <span title={view.config.behaviorDir}>comportamento: <span className="font-mono">{view.config.behaviorDir.split("/").filter(Boolean).pop()}</span></span>
+        </>
+      )}
       <span>·</span>
       {verified ? (
         <span>{auth?.email ?? "verificada"}</span>

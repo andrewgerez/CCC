@@ -126,5 +126,6 @@ pub fn policy_roots(spec_writable: &[PathBuf], a: &AccountConfig) -> (Vec<PathBu
     write.push(crate::paths::normalize(&a.config_dir));
     let mut read = write.clone();
     read.extend(a.extra_read_paths.iter().map(|p| crate::paths::normalize(p)));
+    read.extend(a.behavior_dir.iter().map(|p| crate::paths::normalize(p)));
     (read, write)
 }

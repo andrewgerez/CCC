@@ -513,6 +513,14 @@ impl Actor {
             let real = crate::paths::validate_repo(&acc, &other, d)?;
             args.extend(["--add-dir".into(), real.display().to_string()]);
         }
+        let behavior = acc.behavior_dir.as_ref().filter(|d| d.is_dir()).map(|d| crate::paths::normalize(d));
+        if let Some(dir) = &behavior {
+            // Skills under .claude/skills load from --add-dir; a plugin manifest adds agents/commands/hooks.
+            args.extend(["--add-dir".into(), dir.display().to_string()]);
+            if dir.join(".claude-plugin/plugin.json").is_file() {
+                args.extend(["--plugin-dir".into(), dir.display().to_string()]);
+            }
+        }
         if self.s.resumable {
             args.extend(["--resume".into(), self.s.id.clone()]);
         } else {
@@ -530,6 +538,10 @@ impl Actor {
             run_id: format!("{}:{}", self.account.as_str(), self.s.id),
         };
         let mut cmd = launch::command(&spec)?;
+        if behavior.is_some() {
+            // Opt-in so the behaviour folder's CLAUDE.md is read like a project memory file.
+            cmd.env("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1");
+        }
         Ok(cmd.spawn()?)
     }
 
