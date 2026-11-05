@@ -11,6 +11,7 @@ import { useUi } from "../../store/ui";
 import { NotificationBell } from "../shell/NotificationBell";
 import { buildCanvas, pickSessions, type CardData } from "./build";
 import { cardTypes } from "./cards";
+import { ClaudeGym } from "./ClaudeGym";
 import { ClaudeMascot, sessionMascot } from "./ClaudeMascot";
 
 const ACCOUNTS: AccountId[] = ["work", "personal"];
@@ -114,7 +115,13 @@ function EmptyState({ account }: { account: AccountId }) {
   return (
     <div className="absolute inset-0 grid place-items-center">
       <div className="flex max-w-sm flex-col items-center text-center">
-        <ClaudeMascot state="idle" size="lg" className="shadow-[0_12px_30px_-16px_rgb(40_30_10/0.3)]" />
+        {verified ? (
+          <div className="grid size-40 place-items-center rounded-[32px] bg-[#fbefe7] shadow-[0_12px_30px_-16px_rgb(40_30_10/0.3)]">
+            <ClaudeGym className="w-32" />
+          </div>
+        ) : (
+          <ClaudeMascot state="idle" size="lg" className="shadow-[0_12px_30px_-16px_rgb(40_30_10/0.3)]" />
+        )}
         <h2 className="mt-5 text-lg font-semibold">
           {verified ? "Nenhum Claude trabalhando aqui" : `${ACCOUNT_LABEL[account]} ainda não está conectada`}
         </h2>

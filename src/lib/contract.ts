@@ -177,6 +177,7 @@ export interface SessionDetail { session: SessionSummary; agents: AgentNode[]; a
 export type UiEvent =
   | { type: "sessionUpsert"; session: SessionSummary }
   | { type: "sessionRemoved"; account: AccountId; sessionId: string }
+  | { type: "mcpLogin"; account: AccountId; name: string; phase: "url" | "done" | "error"; text: string }
   | { type: "chat"; account: AccountId; item: ChatItem }
   | { type: "delta"; account: AccountId; sessionId: string; agentId: string | null; messageId: string; text: string }
   | { type: "agentUpsert"; account: AccountId; agent: AgentNode }

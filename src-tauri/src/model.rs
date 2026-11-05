@@ -420,6 +420,8 @@ pub enum UiEvent {
     SessionUpsert { session: SessionSummary },
     #[serde(rename_all = "camelCase")]
     SessionRemoved { account: AccountId, session_id: String },
+    /// Progress of an MCP OAuth login: phase is "url" (opened in the browser), "done" or "error".
+    McpLogin { account: AccountId, name: String, phase: String, text: String },
     #[serde(rename_all = "camelCase")]
     Chat { account: AccountId, item: ChatItem },
     #[serde(rename_all = "camelCase")]

@@ -76,7 +76,12 @@ pub struct LaunchSpec<'a> {
 const FORBIDDEN_ARGS: &[&str] = &["--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "bypassPermissions"];
 
 pub fn command(spec: &LaunchSpec) -> AppResult<tokio::process::Command> {
-    if spec.args.iter().any(|a| FORBIDDEN_ARGS.contains(&a.as_str())) {
+    command_with(spec, &spec.claude.path, &spec.args)
+}
+
+/// Same sandbox, env and policy as `command`, but running another program (e.g. `script` for a pty).
+pub fn command_with(spec: &LaunchSpec, program: &Path, args: &[String]) -> AppResult<tokio::process::Command> {
+    if args.iter().any(|a| FORBIDDEN_ARGS.iter().any(|f| a.contains(f))) {
         return Err(AppError::Invalid("permission bypass flags are never allowed".into()));
     }
     let home = dirs::home_dir().ok_or_else(|| AppError::Invalid("no home dir".into()))?;
@@ -94,7 +99,7 @@ pub fn command(spec: &LaunchSpec) -> AppResult<tokio::process::Command> {
         cache_dir: &cache,
         enforce: spec.enforce,
     })?;
-    let (exe, argv) = sandbox::launcher_argv(&spec.claude.path, &spec.args)?;
+    let (exe, argv) = sandbox::launcher_argv(program, args)?;
     let env = envsafe::build_env(
         spec.account,
         &spec.run_id,

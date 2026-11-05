@@ -62,4 +62,8 @@ export const api = {
   mcpAdd: (account: AccountId, name: string, config: Record<string, unknown>) =>
     invoke<McpServer[]>("mcp_add", { account, name, config }),
   mcpRemove: (account: AccountId, name: string) => invoke<McpServer[]>("mcp_remove", { account, name }),
+  mcpLogin: (account: AccountId, name: string) => invoke<void>("mcp_login", { account, name }),
+  mcpLoginInput: (account: AccountId, name: string, text: string) => invoke<void>("mcp_login_input", { account, name, text }),
+  mcpLoginCancel: (account: AccountId, name: string) => invoke<void>("mcp_login_cancel", { account, name }),
+  openExternal: (url: string) => invoke<void>("open_external", { url }),
 };

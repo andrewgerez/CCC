@@ -693,3 +693,138 @@ pub async fn mcp_remove(st: S<'_>, account: AccountId, name: String) -> AppResul
     let (acc, _) = st.account_pair(account)?;
     crate::mcp::list(&acc)
 }
+
+
+fn script_bin() -> AppResult<PathBuf> {
+    ["/usr/bin/script", "/bin/script"]
+        .iter()
+        .map(PathBuf::from)
+        .find(|p| p.exists())
+        .ok_or_else(|| AppError::Process("comando `script` (util-linux) não encontrado".into()))
+}
+
+/// Opens a URL in the user's default browser, outside the sandbox.
+fn open_in_browser(url: &str) {
+    if !url.starts_with("https://") {
+        return;
+    }
+    let _ = std::process::Command::new("xdg-open")
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+/// OAuth for a remote MCP server: runs `claude mcp login <name> --no-browser` under a pty
+/// (the CLI refuses without a terminal) inside the account sandbox, opens the authorize URL
+/// in the user's browser and lets the CLI's localhost callback finish the flow.
+#[tauri::command]
+pub async fn mcp_login(st: S<'_>, account: AccountId, name: String) -> AppResult<()> {
+    if !crate::mcp::valid_name(&name) {
+        return Err(AppError::Invalid("nome inválido".into()));
+    }
+    let st = st.inner().clone();
+    let (acc, other) = st.account_pair(account)?;
+    if !crate::mcp::list(&acc)?.iter().any(|s| s.name == name) {
+        return Err(AppError::NotFound(format!("MCP {name} não está conectado nesta conta")));
+    }
+    let claude = st.claude.clone().ok_or_else(|| AppError::Process("claude CLI não encontrado".into()))?;
+    let claude_path = claude.path.display().to_string();
+    if claude_path.contains('\'') {
+        return Err(AppError::Invalid("caminho do claude CLI não suportado".into()));
+    }
+    let key = (account, name.clone());
+    let mut logins = st.mcp_logins.lock().await;
+    if logins.contains_key(&key) {
+        return Err(AppError::Invalid("login deste MCP já em andamento".into()));
+    }
+    let spec = crate::launch::LaunchSpec {
+        account: &acc,
+        other: &other,
+        claude: &claude,
+        data: &st.data,
+        enforce: st.settings.read().sandbox_enforce,
+        writable: vec![],
+        cwd: acc.config_dir.clone(),
+        args: vec![],
+        run_id: format!("mcp-login-{}", uuid::Uuid::new_v4()),
+    };
+    let line = format!("'{claude_path}' mcp login {name} --no-browser");
+    let args: Vec<String> = vec!["-q".into(), "-e".into(), "-c".into(), line, "/dev/null".into()];
+    let mut child = crate::launch::command_with(&spec, &script_bin()?, &args)?.spawn()?;
+    let stdin = child.stdin.take();
+    let out = child.stdout.take();
+    logins.insert(key.clone(), crate::state::LoginHandle { stdin, pid: child.id() });
+    drop(logins);
+    let em = st.emitter.clone();
+    let last = Arc::new(parking_lot::Mutex::new(String::new()));
+    if let Some(out) = out {
+        let (em, name, last) = (em.clone(), name.clone(), last.clone());
+        tauri::async_runtime::spawn(async move {
+            let mut lines = BufReader::new(out).lines();
+            let mut opened = false;
+            while let Ok(Some(l)) = lines.next_line().await {
+                if !opened {
+                    if let Some(url) = crate::mcp::authorize_url(&l) {
+                        opened = true;
+                        open_in_browser(&url);
+                        em.send(UiEvent::McpLogin { account, name: name.clone(), phase: "url".into(), text: url }).await;
+                        continue;
+                    }
+                }
+                let clean = crate::mcp::strip_ansi(&l).trim().to_string();
+                if !clean.is_empty() {
+                    *last.lock() = crate::redact::redact(&clean);
+                }
+            }
+        });
+    }
+    tauri::async_runtime::spawn(async move {
+        let status = tokio::time::timeout(std::time::Duration::from_secs(600), child.wait()).await;
+        let ok = matches!(status, Ok(Ok(s)) if s.success());
+        if status.is_err() {
+            let _ = child.kill().await;
+        }
+        st.mcp_logins.lock().await.remove(&key);
+        let text = if ok { "autenticado".to_string() } else { last.lock().clone() };
+        let phase = if ok { "done" } else { "error" };
+        st.emitter.send(UiEvent::McpLogin { account, name: key.1, phase: phase.into(), text }).await;
+    });
+    Ok(())
+}
+
+/// Pastes the redirect URL into a running `mcp login` (fallback when the localhost callback can't be reached).
+#[tauri::command]
+pub async fn mcp_login_input(st: S<'_>, account: AccountId, name: String, text: String) -> AppResult<()> {
+    if text.len() > 8192 || text.contains('\0') || text.contains('\n') {
+        return Err(AppError::Invalid("entrada inválida".into()));
+    }
+    let mut logins = st.mcp_logins.lock().await;
+    let h = logins.get_mut(&(account, name)).ok_or_else(|| AppError::NotFound("nenhum login em andamento".into()))?;
+    if let Some(w) = h.stdin.as_mut() {
+        w.write_all(format!("{}\r", text.trim()).as_bytes()).await?;
+        w.flush().await?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mcp_login_cancel(st: S<'_>, account: AccountId, name: String) -> AppResult<()> {
+    if let Some(h) = st.mcp_logins.lock().await.remove(&(account, name)) {
+        if let Some(pid) = h.pid {
+            let _ = nix::sys::signal::killpg(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
+        }
+    }
+    Ok(())
+}
+
+/// Opens an https link (token pages, docs) in the user's browser.
+#[tauri::command]
+pub fn open_external(url: String) -> AppResult<()> {
+    if !url.starts_with("https://") || url.len() > 2048 || url.chars().any(char::is_whitespace) {
+        return Err(AppError::Invalid("apenas links https".into()));
+    }
+    open_in_browser(&url);
+    Ok(())
+}

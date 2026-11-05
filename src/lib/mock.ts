@@ -317,6 +317,9 @@ async function handle(cmd: string, a: Args): Promise<unknown> {
       mcps[acc] = [...mcps[acc].filter((m) => m.name !== a.name), { name: a.name as string, transport: kind, target, secrets }].sort((x, y) => x.name.localeCompare(y.name));
       return mcps[acc];
     }
+    case "mcp_login": setTimeout(() => emit([{ type: "mcpLogin", account: acc, name: a.name as string, phase: "url", text: "https://example.com/oauth/authorize" }]), 400);
+      setTimeout(() => emit([{ type: "mcpLogin", account: acc, name: a.name as string, phase: "done", text: "autenticado" }]), 2500); return null;
+    case "mcp_login_input": case "mcp_login_cancel": case "open_external": return null;
     case "mcp_remove": mcps[acc] = mcps[acc].filter((m) => m.name !== a.name); return mcps[acc];
     case "archive_session": emit([upsertSession(a.sessionId as string, { status: "archived", pid: null })]); return null;
     case "set_session_priority": emit([upsertSession(a.sessionId as string, { priority: a.priority as number })]); return null;

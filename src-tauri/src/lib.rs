@@ -100,6 +100,10 @@ pub fn run() {
             commands::mcp_list,
             commands::mcp_add,
             commands::mcp_remove,
+            commands::mcp_login,
+            commands::mcp_login_input,
+            commands::mcp_login_cancel,
+            commands::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

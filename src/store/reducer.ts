@@ -32,6 +32,8 @@ export interface DataState {
   metrics: MetricsSnapshot | null;
   notices: Notice[];
   noticeSeq: number;
+  /** "account:name" -> latest MCP OAuth login progress */
+  mcpLogins: Record<string, { phase: "url" | "done" | "error"; text: string; ts: number }>;
 }
 
 export const initialData = (): DataState => ({
@@ -46,6 +48,7 @@ export const initialData = (): DataState => ({
   metrics: null,
   notices: [],
   noticeSeq: 0,
+  mcpLogins: {},
 });
 
 /** Inserts items into an ascending-by-seq array, de-duplicating by seq. Returns a new array. */
@@ -93,6 +96,10 @@ export function applyBatch(state: DataState, events: UiEvent[]): Partial<DataSta
     switch (ev.type) {
       case "sessionUpsert": {
         copyTop("sessions")[ev.session.id] = ev.session;
+        break;
+      }
+      case "mcpLogin": {
+        copyTop("mcpLogins")[`${ev.account}:${ev.name}`] = { phase: ev.phase, text: ev.text, ts: Date.now() };
         break;
       }
       case "sessionRemoved": {

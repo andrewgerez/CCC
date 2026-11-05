@@ -1,11 +1,13 @@
-import { Globe, KeyRound, Plug, Terminal, Trash2 } from "lucide-react";
+import { Check, ExternalLink, Globe, KeyRound, Plug, Terminal, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import martelo from "../../assets/claudes/martelo.gif";
 import { Input, Label, Textarea } from "../../components/ui/input";
 import { api } from "../../lib/api";
 import type { AccountId, McpServer } from "../../lib/contract";
 import { ACCOUNT_LABEL, cn, errMessage } from "../../lib/utils";
+import { useData } from "../../store/data";
 import { useUi } from "../../store/ui";
+import { CATALOG, type CatalogItem } from "./catalog";
 
 type Kind = "stdio" | "http" | "sse";
 const KINDS: { id: Kind; label: string }[] = [
@@ -45,6 +47,119 @@ export function buildConfig(kind: Kind, target: string, pairs: string): Record<s
     return { type: "stdio", command: command ?? "", args, ...(has ? { env: kv } : {}) };
   }
   return { type: kind, url: target.trim(), ...(has ? { headers: kv } : {}) };
+}
+
+type CardState = { step: "idle" } | { step: "form" } | { step: "busy" } | { step: "waiting"; since: number } | { step: "error"; text: string };
+
+function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; account: AccountId; connected: boolean; onList: (l: McpServer[]) => void }) {
+  const [st, setSt] = useState<CardState>({ step: "idle" });
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries((item.fields ?? []).map((f) => [f.key, f.initial ?? ""])));
+  const [paste, setPaste] = useState("");
+  const login = useData((s) => s.mcpLogins[`${account}:${item.name}`]);
+
+  useEffect(() => {
+    if (st.step !== "waiting" || !login || login.ts < st.since) return;
+    if (login.phase === "done") setSt({ step: "idle" });
+    else if (login.phase === "error") setSt({ step: "error", text: login.text || "não foi possível autenticar" });
+  }, [login, st]);
+
+  const startLogin = async () => {
+    setSt({ step: "waiting", since: Date.now() - 50 });
+    try { await api.mcpLogin(account, item.name); } catch (e) { setSt({ step: "error", text: errMessage(e) }); }
+  };
+  const connect = async () => {
+    setSt({ step: "busy" });
+    try {
+      onList(await api.mcpAdd(account, item.name, item.build(values)));
+      if (item.auth === "oauth") await startLogin();
+      else setSt({ step: "idle" });
+    } catch (e) {
+      setSt({ step: "error", text: errMessage(e) });
+    }
+  };
+  const needsForm = (item.fields?.length ?? 0) > 0;
+  const formOk = (item.fields ?? []).every((f) => (values[f.key] ?? "").trim() || f.initial);
+  const disabled = !!item.unavailable;
+
+  return (
+    <li className={cn("flex flex-col rounded-2xl bg-surface p-3.5 shadow-[0_0_0_1px_var(--color-line)]", disabled && "opacity-60")}>
+      <div className="flex items-center gap-3">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl text-[14px] font-bold" style={{ background: item.color[0], color: item.color[1] }}>{item.monogram}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold">{item.title}</div>
+          <div className="truncate text-[12px] text-muted">{item.unavailable ?? item.description}</div>
+        </div>
+        {connected && st.step === "idle" && <span className="flex items-center gap-1 text-[12px] font-medium text-green"><Check className="size-3.5" />Conectado</span>}
+      </div>
+
+      {st.step === "form" && (
+        <form className="mt-3 space-y-2" onSubmit={(e) => { e.preventDefault(); void connect(); }}>
+          {item.fields!.map((f) => (
+            <div key={f.key}>
+              <Label htmlFor={`${item.id}-${f.key}`}>{f.label}</Label>
+              <Input id={`${item.id}-${f.key}`} className="font-mono" type={f.secret ? "password" : "text"} autoComplete="off" placeholder={f.placeholder}
+                value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} autoFocus />
+            </div>
+          ))}
+          {item.keyHelp && (
+            <button type="button" onClick={() => void api.openExternal(item.keyHelp!.url)} className="inline-flex items-center gap-1 text-[12px] font-medium text-cyan hover:underline">
+              {item.keyHelp.label} <ExternalLink className="size-3" />
+            </button>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setSt({ step: "idle" })} className="rounded-full px-3 py-1.5 text-[12.5px] text-muted hover:bg-surface-3">Cancelar</button>
+            <button type="submit" disabled={!formOk} className="rounded-full bg-fg px-3.5 py-1.5 text-[12.5px] font-medium text-white disabled:opacity-45">
+              {item.auth === "oauth" ? "Conectar e entrar" : "Conectar"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {st.step === "waiting" && (
+        <div className="mt-3 space-y-2 rounded-xl bg-surface-3/70 p-3 text-[12.5px]">
+          <div className="flex items-center gap-2 font-medium"><span className="size-2 animate-pulse rounded-full bg-claude" />Autorize na janela do navegador que abriu…</div>
+          <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); if (paste.trim()) void api.mcpLoginInput(account, item.name, paste.trim()).then(() => setPaste("")).catch((x) => setSt({ step: "error", text: errMessage(x) })); }}>
+            <Input className="h-8 flex-1 font-mono text-[11.5px]" placeholder="Não voltou sozinho? Cole aqui a URL de retorno" value={paste} onChange={(e) => setPaste(e.target.value)} />
+            <button type="submit" className="rounded-full bg-fg px-3 text-[12px] font-medium text-white">Enviar</button>
+          </form>
+          <button onClick={() => { void api.mcpLoginCancel(account, item.name); setSt({ step: "idle" }); }} className="text-[12px] text-muted hover:text-fg-2">Cancelar</button>
+        </div>
+      )}
+
+      {st.step === "error" && (
+        <div role="alert" className="mt-3 rounded-xl bg-red/10 px-3 py-2 text-[12px] text-red">{st.text}</div>
+      )}
+
+      {!disabled && st.step !== "form" && st.step !== "waiting" && (
+        <div className="mt-3 flex justify-end gap-2">
+          {connected && item.auth === "oauth" && (
+            <button onClick={() => void startLogin()} className="rounded-full px-3 py-1.5 text-[12.5px] font-medium text-fg-2 hover:bg-surface-3">Entrar de novo</button>
+          )}
+          {(!connected || st.step === "error") && (
+            <button
+              disabled={st.step === "busy"}
+              onClick={() => (needsForm ? setSt({ step: "form" }) : void connect())}
+              className="rounded-full bg-fg px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#3a3833] disabled:opacity-45"
+            >
+              {st.step === "busy" ? "Conectando…" : st.step === "error" ? "Tentar de novo" : item.auth === "oauth" ? "Conectar" : item.auth === "key" ? "Conectar com chave" : "Adicionar"}
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function Catalog({ account, list, onList }: { account: AccountId; list: McpServer[]; onList: (l: McpServer[]) => void }) {
+  const names = new Set(list.map((s) => s.name));
+  return (
+    <section className="space-y-2.5">
+      <h3 className="text-[13px] font-semibold text-fg-2">Conectar em um clique</h3>
+      <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {CATALOG.map((item) => <CatalogCard key={item.id} item={item} account={account} connected={names.has(item.name)} onList={onList} />)}
+      </ul>
+    </section>
+  );
 }
 
 function AccountTabs({ account, onChange }: { account: AccountId; onChange: (a: AccountId) => void }) {
@@ -205,6 +320,8 @@ export default function McpView() {
             ))}
           </ul>
         )}
+        {list && <Catalog key={account} account={account} list={list} onList={setList} />}
+        <h3 className="pt-2 text-[13px] font-semibold text-fg-2">Outro servidor</h3>
         <AddForm account={account} onAdded={setList} />
       </div>
     </div>

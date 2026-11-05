@@ -86,6 +86,52 @@ pub fn list(acc: &AccountConfig) -> AppResult<Vec<McpServer>> {
     list_from(&acc.config_dir)
 }
 
+/// Removes ANSI CSI/OSC escape sequences from terminal output.
+pub fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c != '\u{1b}' {
+            if c != '\u{7}' && c != '\r' {
+                out.push(c);
+            }
+            continue;
+        }
+        match it.next() {
+            Some('[') => {
+                while let Some(&n) = it.peek() {
+                    it.next();
+                    if ('@'..='~').contains(&n) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                // OSC: until BEL or ESC \
+                while let Some(n) = it.next() {
+                    if n == '\u{7}' {
+                        break;
+                    }
+                    if n == '\u{1b}' {
+                        it.next();
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// First https URL in a line of `claude mcp login` output, if any.
+pub fn authorize_url(line: &str) -> Option<String> {
+    let clean = strip_ansi(line);
+    let start = clean.find("https://")?;
+    let url: String = clean[start..].chars().take_while(|c| !c.is_whitespace()).collect();
+    (url.len() > "https://".len()).then_some(url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,6 +157,14 @@ mod tests {
         assert_eq!(l[1].secrets, ["Authorization"]);
         let dump = serde_json::to_string(&l).unwrap();
         assert!(!dump.contains("s3cr3t") && !dump.contains("Bearer abc"));
+    }
+
+    #[test]
+    fn extracts_authorize_url_from_tty_output() {
+        let osc = "  \u{1b}]8;;https://mcp.example.com/oauth/authorize?a=1&b=2\u{1b}\\https://mcp.example.com/oauth/authorize?a=1&b=2\u{1b}]8;;\u{1b}\\";
+        assert_eq!(authorize_url(osc).as_deref(), Some("https://mcp.example.com/oauth/authorize?a=1&b=2"));
+        assert_eq!(authorize_url("\u{1b}[33mWaiting for authorization…\u{1b}[0m"), None);
+        assert_eq!(strip_ansi("\u{1b}[1G\u{1b}[0JOr paste the redirect URL here: "), "Or paste the redirect URL here: ");
     }
 
     #[test]

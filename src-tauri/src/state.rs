@@ -37,6 +37,8 @@ pub struct AppState {
     pub claude: Option<ClaudeBin>,
     pub claude_version: RwLock<Option<String>>,
     pub logins: tokio::sync::Mutex<HashMap<AccountId, LoginHandle>>,
+    /// In-flight `claude mcp login` runs, keyed by (account, server name).
+    pub mcp_logins: tokio::sync::Mutex<HashMap<(AccountId, String), LoginHandle>>,
     pub visibility: Notify,
 }
 
@@ -115,6 +117,7 @@ impl AppState {
             emitter,
             claude_version: RwLock::new(None),
             logins: tokio::sync::Mutex::new(HashMap::new()),
+            mcp_logins: tokio::sync::Mutex::new(HashMap::new()),
             visibility: Notify::new(),
         });
         st.reconcile();
