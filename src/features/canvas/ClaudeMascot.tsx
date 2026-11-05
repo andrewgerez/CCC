@@ -8,7 +8,7 @@ import { ClaudeFlag } from "./ClaudeFlag";
 
 export type MascotState = "run" | "need" | "done" | "idle" | "error";
 /** What a working Claude is doing right now. */
-export type Activity = "typing" | "tool" | "waiting";
+export type Activity = "typing" | "waiting";
 
 export function sessionMascot(s: SessionStatus): MascotState {
   switch (s) {
@@ -30,8 +30,15 @@ export function agentMascot(s: AgentStatus): MascotState {
   }
 }
 
-export const ACTIVITY_LABEL: Record<Activity, string> = { typing: "trabalhando", tool: "usando ferramenta", waiting: "esperando subagente" };
-const ACTIVITY_GIF: Record<Activity, string> = { typing, tool: martelo, waiting };
+export const ACTIVITY_LABEL: Record<Activity, string> = { typing: "trabalhando", waiting: "esperando subagente" };
+const ACTIVITY_GIF: Record<Activity, string> = { typing, waiting };
+
+/** Per-GIF framing so the whole sprite fits the tile, centred (measured sprite bounds: scale, then shift in tile %). */
+export const GIF_FIT: Record<string, string> = {
+  [typing]: "none",
+  [waiting]: "translate(-1.2%, -5.8%) scale(1.15)",
+  [martelo]: "translate(-11.9%, -44.2%) scale(1.7)",
+};
 
 type Badge = "need" | "idle" | "error";
 
@@ -76,7 +83,8 @@ export const ClaudeMascot = memo(function ClaudeMascot({
           src={g.src}
           alt={g.label}
           draggable={false}
-          className={cn("size-full scale-[1.45] object-cover mix-blend-multiply", g.dim && "opacity-60 grayscale")}
+          style={{ transform: GIF_FIT[g.src] }}
+          className={cn("size-full object-contain mix-blend-multiply", g.dim && "opacity-60 grayscale")}
         />
       </div>
       {badge && (

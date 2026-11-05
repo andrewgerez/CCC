@@ -8,10 +8,9 @@ export type { Activity };
 export type SessionCardData = { kind: "session"; session: SessionSummary; subagents: number; activity: Activity | null };
 export type AgentCardData = { kind: "agent"; agent: AgentNode; account: AccountId; activity: Activity | null };
 
-/** Using a tool beats waiting, waiting on a running child beats plain typing. */
-export function activityOf(working: boolean, usingTool: boolean, childActive: boolean): Activity | null {
+/** A working Claude is typing, unless it is waiting on one of its subagents. */
+export function activityOf(working: boolean, childActive: boolean): Activity | null {
   if (!working) return null;
-  if (usingTool) return "tool";
   if (childActive) return "waiting";
   return "typing";
 }
@@ -75,8 +74,7 @@ export function buildCanvas(
       return p && p.kind !== "orchestrator" && a.parentId !== a.id ? p.id : null;
     };
     const activeChild = (pid: string | null) => subs.some((c) => parentOf(c) === pid && isActiveAgent(c.status));
-    const orch = Object.values(map).find((a) => a.kind === "orchestrator");
-    const sessionActivity = activityOf(sessionMascot(s.status) === "run", orch?.status === "tool", activeChild(null));
+    const sessionActivity = activityOf(sessionMascot(s.status) === "run", activeChild(null));
     push(sid, null, CARD.session);
     nodes.push({ id: sid, type: "session", position: { x: 0, y: 0 }, data: { kind: "session", session: s, subagents: subs.length, activity: sessionActivity } });
     for (const a of subs) {
@@ -84,7 +82,7 @@ export function buildCanvas(
       const pid = parentOf(a);
       const parent = pid ? `a:${s.id}:${pid}` : sid;
       push(id, parent, CARD.agent);
-      const activity = activityOf(a.status === "running" || a.status === "tool", a.status === "tool", activeChild(a.id));
+      const activity = activityOf(a.status === "running" || a.status === "tool", activeChild(a.id));
       nodes.push({ id, type: "agent", position: { x: 0, y: 0 }, data: { kind: "agent", agent: a, account: s.account, activity } });
       const live = isActiveAgent(a.status) || (a.status === "unknown" && isActiveSession(s.status));
       edges.push({ id: `e:${parent}->${id}`, source: parent, target: id, type: "default", animated: live });

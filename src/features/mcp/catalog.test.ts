@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATALOG } from "./catalog";
+import { CATALOG, isOutdated } from "./catalog";
 
 const byId = (id: string) => CATALOG.find((c) => c.id === id)!;
 
@@ -21,5 +21,17 @@ describe("MCP catalog", () => {
     expect(byId("gitlab").build({ host: "https://git.example.com/" })).toEqual({ type: "http", url: "https://git.example.com/api/v4/mcp" });
     expect(byId("github").build({ token: " t0k " })).toMatchObject({ headers: { Authorization: "Bearer t0k" } });
     expect(byId("bitmovin").build({ key: "k" })).toMatchObject({ headers: { "x-api-key": "k" } });
+  });
+});
+
+describe("outdated detection", () => {
+  const jira = CATALOG.find((c) => c.id === "atlassian")!;
+  it("flags the retired Atlassian SSE endpoint, not the current one", () => {
+    expect(isOutdated(jira, { transport: "sse", target: "https://mcp.atlassian.com/v1/sse" })).toBe(true);
+    expect(isOutdated(jira, { transport: "http", target: "https://mcp.atlassian.com/v2/mcp" })).toBe(false);
+  });
+  it("never flags entries with a user-chosen host", () => {
+    const gitlab = CATALOG.find((c) => c.id === "gitlab")!;
+    expect(isOutdated(gitlab, { transport: "http", target: "https://git.example.com/api/v4/mcp" })).toBe(false);
   });
 });

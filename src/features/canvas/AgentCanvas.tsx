@@ -188,7 +188,7 @@ function Inner() {
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-4">
         <div className={cn(float, "pointer-events-auto flex h-[68px] items-center gap-2 pl-1.5 pr-2")}>
           <div className="size-14 shrink-0 overflow-hidden rounded-full bg-[#fbefe7]">
-            <img src={phone} alt="ccc" className="size-full scale-[1.35] object-cover mix-blend-multiply" draggable={false} />
+            <img src={phone} alt="ccc" className="size-full object-contain mix-blend-multiply" style={{ transform: "translate(0, -2.8%) scale(1.3)" }} draggable={false} />
           </div>
           {!narrow && <span className="mr-1 text-[17px] font-bold tracking-tight">ccc</span>}
           <button onClick={() => openComposer(account)} className="rounded-full bg-claude px-5 py-3 text-[15px] font-semibold text-white hover:brightness-95" aria-label="Nova tarefa (N)">

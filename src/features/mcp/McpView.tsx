@@ -7,7 +7,8 @@ import type { AccountId, McpServer } from "../../lib/contract";
 import { ACCOUNT_LABEL, cn, errMessage } from "../../lib/utils";
 import { useData } from "../../store/data";
 import { useUi } from "../../store/ui";
-import { CATALOG, type CatalogItem } from "./catalog";
+import { GIF_FIT } from "../canvas/ClaudeMascot";
+import { CATALOG, isOutdated, type CatalogItem } from "./catalog";
 
 type Kind = "stdio" | "http" | "sse";
 const KINDS: { id: Kind; label: string }[] = [
@@ -51,7 +52,9 @@ export function buildConfig(kind: Kind, target: string, pairs: string): Record<s
 
 type CardState = { step: "idle" } | { step: "form" } | { step: "busy" } | { step: "waiting"; since: number } | { step: "error"; text: string };
 
-function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; account: AccountId; connected: boolean; onList: (l: McpServer[]) => void }) {
+function CatalogCard({ item, account, server, onList }: { item: CatalogItem; account: AccountId; server: McpServer | undefined; onList: (l: McpServer[]) => void }) {
+  const connected = !!server;
+  const outdated = !!server && isOutdated(item, server);
   const [st, setSt] = useState<CardState>({ step: "idle" });
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries((item.fields ?? []).map((f) => [f.key, f.initial ?? ""])));
   const [paste, setPaste] = useState("");
@@ -70,6 +73,8 @@ function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; 
   const connect = async () => {
     setSt({ step: "busy" });
     try {
+      // Replacing an existing entry (outdated endpoint or retry): the CLI refuses duplicate names.
+      if (server) onList(await api.mcpRemove(account, item.name));
       onList(await api.mcpAdd(account, item.name, item.build(values)));
       if (item.auth === "oauth") await startLogin();
       else setSt({ step: "idle" });
@@ -89,7 +94,8 @@ function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; 
           <div className="truncate font-semibold">{item.title}</div>
           <div className="truncate text-[12px] text-muted">{item.unavailable ?? item.description}</div>
         </div>
-        {connected && st.step === "idle" && <span className="flex items-center gap-1 text-[12px] font-medium text-green"><Check className="size-3.5" />Conectado</span>}
+        {connected && !outdated && st.step === "idle" && <span className="flex items-center gap-1 text-[12px] font-medium text-green"><Check className="size-3.5" />Conectado</span>}
+        {outdated && st.step === "idle" && <span className="text-[12px] font-medium text-amber">Endereço antigo</span>}
       </div>
 
       {st.step === "form" && (
@@ -132,16 +138,16 @@ function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; 
 
       {!disabled && st.step !== "form" && st.step !== "waiting" && (
         <div className="mt-3 flex justify-end gap-2">
-          {connected && item.auth === "oauth" && (
+          {connected && !outdated && item.auth === "oauth" && (
             <button onClick={() => void startLogin()} className="rounded-full px-3 py-1.5 text-[12.5px] font-medium text-fg-2 hover:bg-surface-3">Entrar de novo</button>
           )}
-          {(!connected || st.step === "error") && (
+          {(!connected || outdated || st.step === "error") && (
             <button
               disabled={st.step === "busy"}
               onClick={() => (needsForm ? setSt({ step: "form" }) : void connect())}
               className="rounded-full bg-fg px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#3a3833] disabled:opacity-45"
             >
-              {st.step === "busy" ? "Conectando…" : st.step === "error" ? "Tentar de novo" : item.auth === "oauth" ? "Conectar" : item.auth === "key" ? "Conectar com chave" : "Adicionar"}
+              {st.step === "busy" ? "Conectando…" : st.step === "error" ? "Tentar de novo" : outdated ? "Atualizar e entrar" : item.auth === "oauth" ? "Conectar" : item.auth === "key" ? "Conectar com chave" : "Adicionar"}
             </button>
           )}
         </div>
@@ -151,12 +157,12 @@ function CatalogCard({ item, account, connected, onList }: { item: CatalogItem; 
 }
 
 function Catalog({ account, list, onList }: { account: AccountId; list: McpServer[]; onList: (l: McpServer[]) => void }) {
-  const names = new Set(list.map((s) => s.name));
+  const byName = new Map(list.map((s) => [s.name, s]));
   return (
     <section className="space-y-2.5">
       <h3 className="text-[13px] font-semibold text-fg-2">Conectar em um clique</h3>
       <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {CATALOG.map((item) => <CatalogCard key={item.id} item={item} account={account} connected={names.has(item.name)} onList={onList} />)}
+        {CATALOG.map((item) => <CatalogCard key={item.id} item={item} account={account} server={byName.get(item.name)} onList={onList} />)}
       </ul>
     </section>
   );
@@ -301,7 +307,7 @@ export default function McpView() {
       <div className="mx-auto max-w-2xl space-y-5 px-6 pb-12 pt-2">
         <div className="flex items-center gap-4">
           <div className="size-16 shrink-0 overflow-hidden rounded-2xl bg-[#fbefe7]">
-            <img src={martelo} alt="" className="size-full scale-[1.6] object-cover mix-blend-multiply" />
+            <img src={martelo} alt="" className="size-full object-contain mix-blend-multiply" style={{ transform: GIF_FIT[martelo] }} />
           </div>
           <div>
             <h2 className="text-[22px] font-semibold tracking-tight">Conexões MCP</h2>

@@ -27,6 +27,15 @@ export interface CatalogItem {
 
 const http = (url: string, headers?: Record<string, string>) => ({ type: "http", url, ...(headers ? { headers } : {}) });
 
+/** True when an installed server no longer matches the catalog entry (e.g. a vendor moved its endpoint).
+ *  Entries with user-specific fields (GitLab host) are never flagged. */
+export function isOutdated(item: CatalogItem, installed: { transport: string; target: string }): boolean {
+  if (item.unavailable || item.fields?.some((f) => !f.secret)) return false;
+  const v = Object.fromEntries((item.fields ?? []).map((f) => [f.key, "x"]));
+  const cfg = item.build(v) as { type?: string; url?: string };
+  return cfg.type !== installed.transport || cfg.url !== installed.target;
+}
+
 export const CATALOG: CatalogItem[] = [
   {
     id: "monday", name: "monday", title: "monday.com", description: "Boards, itens, updates e docs",
@@ -36,7 +45,8 @@ export const CATALOG: CatalogItem[] = [
   {
     id: "atlassian", name: "atlassian", title: "Jira e Confluence", description: "Issues, sprints e páginas (Atlassian Cloud)",
     color: ["#e6efff", "#0c66e4"], monogram: "J", auth: "oauth",
-    build: () => ({ type: "sse", url: "https://mcp.atlassian.com/v1/sse" }),
+    // v1 (/v1/sse, HTTP+SSE) is being phased out by Atlassian; v2 is Streamable HTTP.
+    build: () => http("https://mcp.atlassian.com/v2/mcp"),
   },
   {
     id: "gitlab", name: "gitlab", title: "GitLab", description: "Projetos, merge requests e pipelines",

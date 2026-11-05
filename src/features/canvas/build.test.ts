@@ -53,18 +53,17 @@ describe("buildCanvas", () => {
 });
 
 describe("activity gifs", () => {
-  it("prefers tool over waiting over typing, nothing when not working", () => {
-    expect(activityOf(false, true, true)).toBeNull();
-    expect(activityOf(true, true, true)).toBe("tool");
-    expect(activityOf(true, false, true)).toBe("waiting");
-    expect(activityOf(true, false, false)).toBe("typing");
+  it("is typing while working, waiting while a subagent works, nothing otherwise", () => {
+    expect(activityOf(false, true)).toBeNull();
+    expect(activityOf(true, true)).toBe("waiting");
+    expect(activityOf(true, false)).toBe("typing");
   });
 
-  it("marks a running session waiting while a subagent works, and an agent with a tool as hammering", () => {
+  it("marks a running session waiting while a subagent works; an agent using a tool still types", () => {
     const sessions = { s1: session("s1") };
     const agents = { s1: { o: agent("o", "s1", { kind: "orchestrator", status: "running" }), a: agent("a", "s1", { parentId: "o", status: "tool" }) } };
     const g = buildCanvas("work", sessions, agents, NOW);
     const d = Object.fromEntries(g.nodes.map((n) => [n.id, n.data.activity]));
-    expect(d).toEqual({ "s:s1": "waiting", "a:s1:a": "tool" });
+    expect(d).toEqual({ "s:s1": "waiting", "a:s1:a": "typing" });
   });
 });
