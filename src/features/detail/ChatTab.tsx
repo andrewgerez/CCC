@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import type { ChatItem, SessionSummary } from "../../lib/contract";
 import { cn, errMessage, fmtCost, fmtDuration, fmtTime, fmtTokens, truncate } from "../../lib/utils";
 import { useData } from "../../store/data";
+import { AttachmentStrip, PasteHint, usePastedImages } from "../shell/Attachments";
 
 const Markdown = lazy(() => import("./Markdown"));
 
@@ -138,7 +139,14 @@ const ChatRow = memo(function ChatRow({ item, sessionId }: { item: ChatItem; ses
     case "user_text":
       return (
         <div className="flex justify-end">
-          <div className="selectable max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-blue/25 bg-blue/10 px-3 py-2 text-[13px] leading-relaxed">{b.text}</div>
+          <div className="selectable max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-blue/25 bg-blue/10 px-3 py-2 text-[13px] leading-relaxed">
+            {!!b.images?.length && (
+              <div className={cn("flex flex-wrap gap-1.5", b.text && "mb-2")}>
+                {b.images.map((src, i) => <img key={i} src={src} alt="imagem enviada" className="max-h-40 max-w-[220px] rounded-lg object-cover" />)}
+              </div>
+            )}
+            {b.text}
+          </div>
         </div>
       );
     case "assistant_text":
@@ -194,6 +202,7 @@ const ChatRow = memo(function ChatRow({ item, sessionId }: { item: ChatItem; ses
 
 function Composer({ session }: { session: SessionSummary }) {
   const [text, setText] = useState("");
+  const pasted = usePastedImages();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const blocked = session.status === "blocked" || session.status === "archived";
@@ -206,9 +215,14 @@ function Composer({ session }: { session: SessionSummary }) {
       : null;
   const send = async () => {
     const t = text.trim();
-    if (!t || busy) return;
+    if ((!t && !pasted.images.length) || busy) return;
     setBusy(true); setErr(null);
-    try { await api.sendMessage(session.account, session.id, t); setText(""); } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
+    const { images, thumbs } = pasted.payload();
+    try {
+      await api.sendMessage(session.account, session.id, t, images, thumbs);
+      setText("");
+      pasted.clear();
+    } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
   };
   return (
     <div className="border-t border-line p-3">
@@ -216,6 +230,7 @@ function Composer({ session }: { session: SessionSummary }) {
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={pasted.onPaste}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
           placeholder={blocked ? "Sessão indisponível" : "Mensagem para o Claude…  (Enter envia · Shift+Enter quebra linha)"}
           disabled={blocked}
@@ -223,8 +238,9 @@ function Composer({ session }: { session: SessionSummary }) {
           aria-label="Mensagem"
           className="border-0 bg-transparent focus:ring-0"
         />
+        <AttachmentStrip images={pasted.images} onRemove={pasted.remove} error={pasted.error} className="px-3 pb-2" />
         <div className="flex items-center gap-2 px-2 pb-2">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{err ? <span className="text-red">{err}</span> : hint}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted">{err ? <span className="text-red">{err}</span> : hint ?? <PasteHint />}</span>
           {running && (
             <Button size="xs" variant="warn" onClick={() => api.interruptSession(session.account, session.id).catch((e) => setErr(errMessage(e)))}>
               <Pause /> Interromper
@@ -235,7 +251,7 @@ function Composer({ session }: { session: SessionSummary }) {
               <Square /> Encerrar processo
             </Button>
           )}
-          <Button size="xs" variant="primary" disabled={!text.trim() || busy || blocked} onClick={() => void send()} aria-label="Enviar mensagem">
+          <Button size="xs" variant="primary" disabled={(!text.trim() && !pasted.images.length) || busy || blocked} onClick={() => void send()} aria-label="Enviar mensagem">
             <Send /> Enviar
           </Button>
         </div>

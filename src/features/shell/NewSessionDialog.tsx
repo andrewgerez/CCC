@@ -11,6 +11,7 @@ import { useData } from "../../store/data";
 import { useUi } from "../../store/ui";
 import { ModeToggle } from "./ModeToggle";
 import { ModelPicker } from "./ModelPicker";
+import { AttachmentStrip, PasteHint, usePastedImages } from "./Attachments";
 
 const LOOSE = "__repo__";
 const lastKey = (a: AccountId) => `ccc.lastProject.${a}`;
@@ -30,6 +31,7 @@ export function NewSessionDialog() {
   const [editing, setEditing] = useState<Project | null>(null);
   const [repo, setRepo] = useState("");
   const [prompt, setPrompt] = useState("");
+  const pasted = usePastedImages();
   const [title, setTitle] = useState("");
   const [model, setModel] = useState("");
   const [mode, setMode] = useState<PermissionMode>("auto");
@@ -46,7 +48,7 @@ export function NewSessionDialog() {
     setAccount(acc);
     setRepo(composer.repo ?? selectedRepo[acc] ?? "");
     setWorktree(composer.worktree ?? "");
-    setPrompt(""); setTitle(""); setErr(null); setPriority(0); setEditing(null);
+    setPrompt(""); setTitle(""); setErr(null); setPriority(0); setEditing(null); pasted.clear();
   }, [composer.open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -65,7 +67,7 @@ export function NewSessionDialog() {
   }, [account, composer.open, cfg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const project = projects.find((p) => p.id === target) ?? null;
-  const canSubmit = !!prompt.trim() && !editing && (project ? project.dirs.length > 0 : !!repo);
+  const canSubmit = (!!prompt.trim() || pasted.images.length > 0) && !editing && (project ? project.dirs.length > 0 : !!repo);
 
   const choose = (id: string) => { setTarget(id); setEditing(null); writeLast(account, id); };
 
@@ -75,7 +77,7 @@ export function NewSessionDialog() {
     try {
       const dirs = project?.dirs ?? [repo];
       const s = await api.createSession(account, {
-        repoPath: dirs[0], extraDirs: dirs.slice(1), prompt: prompt.trim(),
+        repoPath: dirs[0], extraDirs: dirs.slice(1), prompt: prompt.trim(), ...pasted.payload(),
         title: title.trim() || (project ? `${project.name}: ${prompt.trim().split("\n")[0].slice(0, 70)}` : null),
         model: model || null, permissionMode: mode, priority,
         worktreePath: project ? null : worktree.trim() || null,
@@ -155,8 +157,10 @@ export function NewSessionDialog() {
 
           <div>
             <Label htmlFor="ns-prompt">Tarefa</Label>
-            <Textarea id="ns-prompt" autoFocus rows={5} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit(); } }}
+            <Textarea id="ns-prompt" autoFocus rows={5} value={prompt} onChange={(e) => setPrompt(e.target.value)} onPaste={pasted.onPaste} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submit(); } }}
               placeholder={project ? `O que fazer no ${project.name}? Ex.: corrija o bug do login no front e no back…` : "Descreva o que o Claude deve fazer…"} />
+            <AttachmentStrip images={pasted.images} onRemove={pasted.remove} error={pasted.error} className="mt-2" />
+            <div className="mt-1"><PasteHint /></div>
           </div>
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2"><Label htmlFor="ns-title">Título (opcional)</Label><Input id="ns-title" value={title} onChange={(e) => setTitle(e.target.value)} /></div>

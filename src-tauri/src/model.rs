@@ -162,7 +162,12 @@ pub struct AgentNode {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ChatBody {
-    UserText { text: String },
+    UserText {
+        text: String,
+        /// Small data-URL previews of pasted images (the full images only go to Claude).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        images: Vec<String>,
+    },
     #[serde(rename_all = "camelCase")]
     AssistantText { message_id: String, text: String },
     #[serde(rename_all = "camelCase")]
@@ -390,6 +395,70 @@ pub struct NewSession {
     pub worktree_path: Option<String>,
     #[serde(default)]
     pub extra_dirs: Option<Vec<String>>,
+    #[serde(default)]
+    pub images: Vec<ImageInput>,
+    /// UI thumbnails for the pasted images, stored in the chat history.
+    #[serde(default)]
+    pub thumbs: Vec<String>,
+}
+
+/// A pasted image: base64 payload plus its media type.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageInput {
+    pub media_type: String,
+    pub data: String,
+}
+
+/// One user turn: text plus optional images (and their UI thumbnails).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Prompt {
+    pub text: String,
+    pub images: Vec<ImageInput>,
+    pub thumbs: Vec<String>,
+}
+
+impl From<String> for Prompt {
+    fn from(text: String) -> Self {
+        Prompt { text, ..Default::default() }
+    }
+}
+
+pub const MAX_IMAGES: usize = 6;
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+const MAX_THUMB_LEN: usize = 64 * 1024;
+const IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+impl Prompt {
+    /// Rejects anything Claude won't accept or that would bloat the pipe / history.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.text.trim().is_empty() && self.images.is_empty() {
+            return Err("mensagem vazia".into());
+        }
+        if self.text.len() > 200_000 {
+            return Err("mensagem grande demais".into());
+        }
+        if self.images.len() > MAX_IMAGES || self.thumbs.len() > MAX_IMAGES {
+            return Err(format!("no máximo {MAX_IMAGES} imagens por mensagem"));
+        }
+        for i in &self.images {
+            if !IMAGE_TYPES.contains(&i.media_type.as_str()) {
+                return Err(format!("formato de imagem não suportado: {}", i.media_type));
+            }
+            if i.data.len() / 4 * 3 > MAX_IMAGE_BYTES {
+                return Err("imagem maior que 5 MB".into());
+            }
+            if i.data.is_empty() || !i.data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=') {
+                return Err("imagem inválida".into());
+            }
+        }
+        for t in &self.thumbs {
+            if t.len() > MAX_THUMB_LEN || !t.starts_with("data:image/") {
+                return Err("miniatura inválida".into());
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A named group of directories inside one account's workspace

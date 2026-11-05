@@ -547,7 +547,7 @@ pub mod tests {
                 session_id: "s".into(),
                 ts: i,
                 agent_id: None,
-                body: ChatBody::UserText { text: format!("m{i}") },
+                body: ChatBody::UserText { text: format!("m{i}"), images: vec![] },
             });
         }
         db.flush();

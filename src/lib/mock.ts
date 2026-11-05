@@ -299,7 +299,7 @@ async function handle(cmd: string, a: Args): Promise<unknown> {
     }
     case "send_message": {
       const id = a.sessionId as string;
-      emit([chatEv(id, { kind: "user_text", text: a.text as string }), upsertSession(id, { status: "running" })]);
+      emit([chatEv(id, { kind: "user_text", text: a.text as string, images: (a.thumbs as string[] | null) ?? undefined }), upsertSession(id, { status: "running" })]);
       simulateTurn(id, "Certo, seguindo com isso agora.", () => emit([upsertSession(id, { status: "waiting_input" })]));
       return null;
     }

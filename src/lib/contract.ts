@@ -53,7 +53,7 @@ export interface AgentNode {
 }
 
 export type ChatBody =
-  | { kind: "user_text"; text: string }
+  | { kind: "user_text"; text: string; images?: string[] }
   | { kind: "assistant_text"; messageId: string; text: string }
   | { kind: "tool_use"; toolUseId: string; name: string; input: string }
   | { kind: "tool_result"; toolUseId: string; content: string; isError: boolean }
@@ -169,6 +169,7 @@ export interface NewSession {
   repoPath: string; prompt: string; title?: string | null; model?: string | null;
   permissionMode?: PermissionMode | null; priority?: number | null; worktreePath?: string | null;
   extraDirs?: string[] | null;
+  images?: ImageInput[]; thumbs?: string[];
 }
 
 /** Named group of directories in one account workspace; first dir is the session cwd. */
@@ -192,6 +193,9 @@ export type UiEvent =
 
 /** User-scope MCP server of one account. Secret values never reach the UI, only their names. */
 export interface McpServer { name: string; transport: "stdio" | "http" | "sse" | "ws"; target: string; secrets: string[] }
+
+/** Pasted image sent to Claude: base64 payload and media type. */
+export interface ImageInput { mediaType: string; data: string }
 
 export interface BehaviorInfo { exists: boolean; skills: string[]; hasClaudeMd: boolean; isPlugin: boolean; agents: number; commands: number }
 

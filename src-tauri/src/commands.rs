@@ -211,7 +211,10 @@ pub fn new_summary(account: AccountId, repo: &Path, req: &NewSession, acc: &Acco
         .title
         .clone()
         .filter(|t| !t.trim().is_empty())
-        .unwrap_or_else(|| req.prompt.lines().next().unwrap_or("").chars().take(80).collect());
+        .unwrap_or_else(|| {
+            let t: String = req.prompt.lines().next().unwrap_or("").chars().take(80).collect();
+            if t.trim().is_empty() { "Tarefa com imagem".into() } else { t }
+        });
     SessionSummary {
         id: uuid::Uuid::new_v4().to_string(),
         account,
@@ -240,9 +243,8 @@ pub fn new_summary(account: AccountId, repo: &Path, req: &NewSession, acc: &Acco
 
 #[tauri::command]
 pub async fn create_session(st: S<'_>, account: AccountId, req: NewSession) -> AppResult<SessionSummary> {
-    if req.prompt.trim().is_empty() || req.prompt.len() > 200_000 {
-        return Err(AppError::Invalid("prompt vazio ou grande demais".into()));
-    }
+    let first_prompt = Prompt { text: req.prompt.clone(), images: req.images.clone(), thumbs: req.thumbs.clone() };
+    first_prompt.validate().map_err(AppError::Invalid)?;
     let (acc, other) = st.account_pair(account)?;
     let repo = crate::paths::validate_repo(&acc, &other, &req.repo_path)?;
     let worktree = match &req.worktree_path {
@@ -260,7 +262,7 @@ pub async fn create_session(st: S<'_>, account: AccountId, req: NewSession) -> A
     s.extra_dirs = extra;
     st.db(account).upsert_session(&s)?;
     st.emitter.send(UiEvent::SessionUpsert { session: s.clone() }).await;
-    Actor::spawn(st.inner().clone(), account, s.id.clone(), vec![req.prompt.clone()])?;
+    Actor::spawn(st.inner().clone(), account, s.id.clone(), vec![first_prompt])?;
     Ok(s)
 }
 
@@ -312,17 +314,23 @@ pub fn delete_project(st: S, account: AccountId, project_id: String) -> AppResul
 }
 
 #[tauri::command]
-pub async fn send_message(st: S<'_>, account: AccountId, session_id: String, text: String) -> AppResult<()> {
-    if text.trim().is_empty() || text.len() > 200_000 {
-        return Err(AppError::Invalid("mensagem vazia ou grande demais".into()));
-    }
+pub async fn send_message(
+    st: S<'_>,
+    account: AccountId,
+    session_id: String,
+    text: String,
+    images: Option<Vec<ImageInput>>,
+    thumbs: Option<Vec<String>>,
+) -> AppResult<()> {
+    let prompt = Prompt { text, images: images.unwrap_or_default(), thumbs: thumbs.unwrap_or_default() };
+    prompt.validate().map_err(AppError::Invalid)?;
     let s = session_of(&st, account, &session_id)?;
     if s.status == SessionStatus::Archived {
         return Err(AppError::Invalid("sessão arquivada".into()));
     }
-    if !send_cmd(&st, account, &session_id, Cmd::Send(text.clone())).await? {
+    if !send_cmd(&st, account, &session_id, Cmd::Send(prompt.clone())).await? {
         // No live process: resume (spawn new actor with --resume).
-        Actor::spawn(st.inner().clone(), account, session_id, vec![text])?;
+        Actor::spawn(st.inner().clone(), account, session_id, vec![prompt])?;
     }
     Ok(())
 }
@@ -507,6 +515,8 @@ pub async fn run_task(st: S<'_>, account: AccountId, task_id: String) -> AppResu
         priority: Some(t.priority),
         worktree_path: None,
         extra_dirs: None,
+        images: vec![],
+        thumbs: vec![],
     };
     let s = new_summary(account, &repo, &req, &acc, None);
     st.db(account).upsert_session(&s)?;
@@ -514,7 +524,7 @@ pub async fn run_task(st: S<'_>, account: AccountId, task_id: String) -> AppResu
     t.session_id = Some(s.id.clone());
     st.db(account).upsert_task(&t)?;
     st.emitter.send(UiEvent::SessionUpsert { session: s.clone() }).await;
-    Actor::spawn(st.inner().clone(), account, s.id.clone(), vec![t.prompt])?;
+    Actor::spawn(st.inner().clone(), account, s.id.clone(), vec![t.prompt.into()])?;
     Ok(s)
 }
 
@@ -603,6 +613,8 @@ pub fn import_external_session(st: S, account: AccountId, repo: String, id: Stri
         priority: None,
         worktree_path: None,
         extra_dirs: None,
+        images: vec![],
+        thumbs: vec![],
     };
     let mut s = new_summary(account, &repo_p, &req, &acc, None);
     s.id = id;

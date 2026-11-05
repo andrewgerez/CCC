@@ -26,7 +26,7 @@ const TOOL_RESULT_CAP: usize = 8 * 1024;
 
 #[derive(Debug)]
 pub enum Cmd {
-    Send(String),
+    Send(Prompt),
     Approve { request_id: String, decision: ApprovalDecision },
     Interrupt,
     Stop,
@@ -61,7 +61,7 @@ struct Pending {
 
 enum Exit {
     /// Prompts that arrived after stdin closed; run again with --resume.
-    Leftover(Vec<String>),
+    Leftover(Vec<Prompt>),
     Done,
 }
 
@@ -76,7 +76,7 @@ pub struct Actor {
 
 impl Actor {
     /// Starts an actor and registers its handle. Returns the handle.
-    pub fn spawn(st: Arc<AppState>, account: AccountId, session_id: String, prompts: Vec<String>) -> AppResult<Handle> {
+    pub fn spawn(st: Arc<AppState>, account: AccountId, session_id: String, prompts: Vec<Prompt>) -> AppResult<Handle> {
         let mut live = st.live.lock();
         if let Some(h) = live.get(&session_id) {
             return Ok(h.clone());
@@ -124,7 +124,7 @@ impl Actor {
         self.chat(None, ChatBody::System { text: redact(&text), level: level.into() }).await;
     }
 
-    async fn run(mut self, mut prompts: Vec<String>) {
+    async fn run(mut self, mut prompts: Vec<Prompt>) {
         loop {
             match self.run_once(std::mem::take(&mut prompts)).await {
                 Exit::Leftover(p) if !p.is_empty() => prompts = p,
@@ -137,7 +137,7 @@ impl Actor {
         self.st.emitter.try_send(UiEvent::Metrics { snapshot: MetricsSnapshot { scheduler: view, ts: now_ms(), ..Default::default() } });
     }
 
-    async fn run_once(&mut self, mut prompts: Vec<String>) -> Exit {
+    async fn run_once(&mut self, mut prompts: Vec<Prompt>) -> Exit {
         // ---- queue for a global slot ----
         self.set_status(SessionStatus::Queued, Some("na fila de execução".into())).await;
         let sched = self.st.scheduler.clone();
@@ -232,8 +232,8 @@ impl Actor {
 
         let mut busy_turns = 0u32; // user messages written but not yet answered by a result
         for p in prompts.drain(..) {
-            self.chat(None, ChatBody::UserText { text: p.clone() }).await;
-            write_line(&mut stdin, protocol::user_message(&p)).await;
+            self.chat(None, ChatBody::UserText { text: p.text.clone(), images: p.thumbs.clone() }).await;
+            write_line(&mut stdin, protocol::user_prompt(&p)).await;
             busy_turns += 1;
         }
         let root = self.tracker.turn_started();
@@ -244,7 +244,7 @@ impl Actor {
         let mut bg_tasks = 0usize;
         let mut pending: HashMap<String, Pending> = HashMap::new();
         let mut idle_since: Option<Instant> = None;
-        let mut leftover: Vec<String> = vec![];
+        let mut leftover: Vec<Prompt> = vec![];
         let mut stopping = false;
         let mut user_stop = false;
         let mut interrupt_deadline: Option<Instant> = None;
@@ -379,8 +379,8 @@ impl Actor {
                 cmd = self.rx.recv() => match cmd {
                     Some(Cmd::Send(t)) => {
                         if stdin.is_some() && !stopping {
-                            self.chat(None, ChatBody::UserText { text: t.clone() }).await;
-                            write_line(&mut stdin, protocol::user_message(&t)).await;
+                            self.chat(None, ChatBody::UserText { text: t.text.clone(), images: t.thumbs.clone() }).await;
+                            write_line(&mut stdin, protocol::user_prompt(&t)).await;
                             busy_turns += 1;
                             let a = self.tracker.turn_started();
                             self.agent(a).await;

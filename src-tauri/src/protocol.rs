@@ -227,6 +227,23 @@ pub fn user_message(text: &str) -> Value {
             "message": { "role": "user", "content": text } })
 }
 
+/// User turn with images: image blocks first, then the text (if any).
+pub fn user_prompt(p: &crate::model::Prompt) -> Value {
+    if p.images.is_empty() {
+        return user_message(&p.text);
+    }
+    let mut content: Vec<Value> = p
+        .images
+        .iter()
+        .map(|i| json!({ "type": "image", "source": { "type": "base64", "media_type": i.media_type, "data": i.data } }))
+        .collect();
+    if !p.text.trim().is_empty() {
+        content.push(json!({ "type": "text", "text": p.text }));
+    }
+    json!({ "type": "user", "session_id": "", "parent_tool_use_id": null,
+            "message": { "role": "user", "content": content } })
+}
+
 pub fn set_model(request_id: &str, model: Option<&str>) -> Value {
     json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "set_model", "model": model } })
 }
@@ -358,6 +375,23 @@ mod tests {
     fn outbound_messages_shape() {
         let init = initialize("i1");
         assert_eq!(init["request"]["subtype"], "initialize");
+        let img = crate::model::ImageInput { media_type: "image/png".into(), data: "iVBORw0KGgo=".into() };
+        let p = crate::model::Prompt { text: "o que é isso?".into(), images: vec![img.clone()], thumbs: vec![] };
+        let u = user_prompt(&p);
+        assert_eq!(u["message"]["content"][0]["type"], "image");
+        assert_eq!(u["message"]["content"][0]["source"]["media_type"], "image/png");
+        assert_eq!(u["message"]["content"][1]["text"], "o que é isso?");
+        assert_eq!(user_prompt(&"oi".to_string().into())["message"]["content"], "oi");
+        assert!(p.validate().is_ok());
+        let only_img = crate::model::Prompt { text: " ".into(), images: vec![img.clone()], thumbs: vec![] };
+        assert!(only_img.validate().is_ok());
+        assert!(crate::model::Prompt::default().validate().is_err());
+        let bad_type = crate::model::Prompt { text: "x".into(), images: vec![crate::model::ImageInput { media_type: "image/svg+xml".into(), data: "AAAA".into() }], thumbs: vec![] };
+        assert!(bad_type.validate().is_err());
+        let bad_b64 = crate::model::Prompt { text: "x".into(), images: vec![crate::model::ImageInput { media_type: "image/png".into(), data: "<script>".into() }], thumbs: vec![] };
+        assert!(bad_b64.validate().is_err());
+        let too_many = crate::model::Prompt { text: "x".into(), images: vec![img; 7], thumbs: vec![] };
+        assert!(too_many.validate().is_err());
         let m = set_model("m1", Some("opus"));
         assert_eq!((m["type"].as_str(), m["request"]["subtype"].as_str(), m["request"]["model"].as_str()), (Some("control_request"), Some("set_model"), Some("opus")));
         assert!(set_model("m2", None)["request"]["model"].is_null());

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  AccountConfig, AccountId, ApprovalDecision, BehaviorInfo, AuthStatus, ChatItem, ExternalSession, McpServer, MetricsSnapshot,
+  AccountConfig, AccountId, ApprovalDecision, BehaviorInfo, ImageInput, AuthStatus, ChatItem, ExternalSession, McpServer, MetricsSnapshot,
   NewSession, PermissionMode, Overview, Project, RepoInfo, RepoStatus, SessionDetail, SessionSummary, Settings, TaskItem,
 } from "./contract";
 
@@ -21,8 +21,8 @@ export const api = {
 
   listSessions: (account?: AccountId | null) => invoke<SessionSummary[]>("list_sessions", { account: account ?? null }),
   createSession: (account: AccountId, req: NewSession) => invoke<SessionSummary>("create_session", { account, req }),
-  sendMessage: (account: AccountId, sessionId: string, text: string) =>
-    invoke<void>("send_message", { account, sessionId, text }),
+  sendMessage: (account: AccountId, sessionId: string, text: string, images?: ImageInput[], thumbs?: string[]) =>
+    invoke<void>("send_message", { account, sessionId, text, images: images ?? null, thumbs: thumbs ?? null }),
   respondApproval: (account: AccountId, sessionId: string, requestId: string, decision: ApprovalDecision) =>
     invoke<void>("respond_approval", { account, sessionId, requestId, decision }),
   interruptSession: (account: AccountId, sessionId: string) => invoke<void>("interrupt_session", { account, sessionId }),
