@@ -307,6 +307,7 @@ async function handle(cmd: string, a: Args): Promise<unknown> {
     case "interrupt_session": emit([upsertSession(a.sessionId as string, { status: "interrupted" }), { type: "notice", level: "warn", text: "Sessão interrompida", account: acc, sessionId: a.sessionId as string }]); return null;
     case "stop_session": emit([upsertSession(a.sessionId as string, { status: "idle", pid: null })]); return null;
     case "delete_session": { delete sessions[a.sessionId as string]; emit([{ type: "sessionRemoved", account: acc, sessionId: a.sessionId as string }]); return null; }
+    case "set_session_model": emit([upsertSession(a.sessionId as string, { model: (a.model as string | null) ?? null })]); return null;
     case "set_permission_mode": emit([upsertSession(a.sessionId as string, { permissionMode: a.mode as SessionSummary["permissionMode"] })]); return null;
     case "mcp_list": return mcps[acc];
     case "mcp_add": {

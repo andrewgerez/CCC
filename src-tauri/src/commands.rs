@@ -837,3 +837,28 @@ pub fn inspect_behavior_dir(path: String) -> AppResult<crate::behavior::Behavior
     }
     Ok(crate::behavior::inspect(Path::new(path.trim())))
 }
+
+/// Model aliases or ids the CLI accepts (`opus`, `sonnet`, `haiku`, `claude-…`, optional `[1m]`).
+pub fn valid_model(m: &str) -> bool {
+    !m.is_empty() && m.len() <= 64 && m.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '[' | ']'))
+}
+
+/// Switches a session's model: live sessions change on the next turn via the control protocol,
+/// others keep it for their next run. `None` = account/CLI default.
+#[tauri::command]
+pub async fn set_session_model(st: S<'_>, account: AccountId, session_id: String, model: Option<String>) -> AppResult<()> {
+    let model = model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty());
+    if let Some(m) = &model {
+        if !valid_model(m) {
+            return Err(AppError::Invalid("modelo inválido".into()));
+        }
+    }
+    let mut s = session_of(&st, account, &session_id)?;
+    if !send_cmd(&st, account, &session_id, Cmd::SetModel(model.clone())).await? {
+        s.model = model;
+        s.updated_at = now_ms();
+        st.db(account).upsert_session(&s)?;
+        st.emitter.send(UiEvent::SessionUpsert { session: s }).await;
+    }
+    Ok(())
+}

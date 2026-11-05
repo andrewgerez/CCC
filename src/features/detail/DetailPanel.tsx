@@ -11,6 +11,7 @@ import { ACCOUNT_LABEL, cn, errMessage, fmtBytes, fmtCost, fmtDuration, fmtRelat
 import { useData } from "../../store/data";
 import { PANEL_ZOOM, useUi, type PanelTab } from "../../store/ui";
 import { ModeToggle } from "../shell/ModeToggle";
+import { ModelPicker } from "../shell/ModelPicker";
 import { ApprovalsTab } from "./Approvals";
 import { ChatTab } from "./ChatTab";
 import { AgentsTab, FilesTab, LogsTab, ToolsTab } from "./Tabs";
@@ -104,7 +105,11 @@ function PanelHeader({ session: s }: { session: SessionSummary }) {
           <Tip content="Fechar · Esc"><Button size="icon" variant="ghost" aria-label="Fechar painel" onClick={close}><X /></Button></Tip>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-[12px] text-muted">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
+        <span>Modelo</span>
+        <ModelPicker value={s.model} onChange={(m) => act(() => api.setSessionModel(s.account, s.id, m || null))} />
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-[12px] text-muted">
         <span>Permissões</span>
         <ModeToggle value={s.permissionMode} onChange={(m) => act(() => api.setPermissionMode(s.account, s.id, m))} />
         {s.permissionMode !== "auto" && s.permissionMode !== "default" && <span className="text-dim">({s.permissionMode})</span>}
@@ -119,8 +124,6 @@ function PanelHeader({ session: s }: { session: SessionSummary }) {
         <button onClick={copy} className="inline-flex items-center gap-1 font-mono hover:text-fg-2" aria-label="Copiar ID da sessão">
           {copied ? <Check className="size-3 text-green" /> : <Copy className="size-3" />}{s.id}
         </button>
-        <span className="text-dim">·</span>
-        <span>{s.model ?? "modelo padrão"}</span>
         <span className="text-dim">·</span>
         <span>{fmtRelative(s.updatedAt)}</span>
       </div>

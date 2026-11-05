@@ -98,6 +98,7 @@ pub fn run() {
             commands::delete_project,
             commands::delete_session,
             commands::set_permission_mode,
+            commands::set_session_model,
             commands::mcp_list,
             commands::mcp_add,
             commands::mcp_remove,

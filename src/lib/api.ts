@@ -29,6 +29,8 @@ export const api = {
   stopSession: (account: AccountId, sessionId: string) => invoke<void>("stop_session", { account, sessionId }),
   archiveSession: (account: AccountId, sessionId: string) => invoke<void>("archive_session", { account, sessionId }),
   deleteSession: (account: AccountId, sessionId: string) => invoke<void>("delete_session", { account, sessionId }),
+  setSessionModel: (account: AccountId, sessionId: string, model: string | null) =>
+    invoke<void>("set_session_model", { account, sessionId, model }),
   setPermissionMode: (account: AccountId, sessionId: string, mode: PermissionMode) =>
     invoke<void>("set_permission_mode", { account, sessionId, mode }),
   setSessionPriority: (account: AccountId, sessionId: string, priority: number) =>

@@ -67,3 +67,40 @@ describe("activity gifs", () => {
     expect(d).toEqual({ "s:s1": "waiting", "a:s1:a": "typing" });
   });
 });
+
+describe("folding big agent trees", () => {
+  const many = (n: number, over: (i: number) => Partial<AgentNode> = () => ({})) => {
+    const m: Record<string, AgentNode> = { o: agent("o", "s1", { kind: "orchestrator" }) };
+    for (let i = 0; i < n; i++) m[`a${i}`] = agent(`a${i}`, "s1", { parentId: "o", startedAt: NOW + i, ...over(i) });
+    return { s1: m };
+  };
+  const sessions = { s1: session("s1") };
+
+  it("collapses a session with many agents into one group card, and unfolds on demand", () => {
+    const agents = many(30, (i) => ({ status: i < 5 ? "running" : "done" }));
+    const g = buildCanvas("work", sessions, agents, NOW);
+    expect(g.nodes.map((n) => n.type)).toEqual(["session", "fold"]);
+    const grp = g.nodes[1].data as { total: number; counts: Record<string, number> };
+    expect(grp.total).toBe(30);
+    expect(grp.counts).toMatchObject({ run: 5, done: 25 });
+    expect(g.foldKeys).toEqual(["s:s1"]);
+
+    const open = buildCanvas("work", sessions, agents, NOW, { "s:s1": true });
+    // 5 running stay visible, 25 finished fold into one card
+    expect(open.nodes.filter((n) => n.type === "agent")).toHaveLength(5);
+    const done = open.nodes.find((n) => n.type === "fold")!.data as { reason: string; total: number };
+    expect(done).toMatchObject({ reason: "finished", total: 25 });
+
+    const all = buildCanvas("work", sessions, agents, NOW, { "s:s1": true, "done:s:s1": true });
+    expect(all.nodes.filter((n) => n.type === "agent")).toHaveLength(30);
+  });
+
+  it("keeps small trees open and folds deep subtrees of a single agent", () => {
+    const m: Record<string, AgentNode> = { o: agent("o", "s1", { kind: "orchestrator" }), p: agent("p", "s1", { parentId: "o" }) };
+    for (let i = 0; i < 5; i++) m[`c${i}`] = agent(`c${i}`, "s1", { parentId: "p", status: "running" });
+    const g = buildCanvas("work", sessions, { s1: m }, NOW);
+    expect(g.nodes.map((n) => n.id)).toEqual(["s:s1", "a:s1:p", "g:a:s1:p"]);
+    const opened = buildCanvas("work", sessions, { s1: m }, NOW, { "a:s1:p": true });
+    expect(opened.nodes.filter((n) => n.type === "agent")).toHaveLength(6);
+  });
+});

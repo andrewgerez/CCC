@@ -33,6 +33,10 @@ interface UiStore {
   loginAccount: AccountId | null;
   visible: boolean;
   panelWidth: number;
+  /** Canvas fold overrides: card key -> open. Missing keys use the size-based default. */
+  expanded: Record<string, boolean>;
+  setExpanded: (key: string, open: boolean) => void;
+  collapseAll: (keys: string[]) => void;
   panelZoom: number;
   setScope: (s: Scope) => void;
   setView: (v: View) => void;
@@ -63,6 +67,9 @@ export const useUi = create<UiStore>()((set) => ({
   loginAccount: null,
   visible: true,
   panelWidth: loadPanel().width,
+  expanded: {},
+  setExpanded: (key, open) => set((s) => ({ expanded: { ...s.expanded, [key]: open } })),
+  collapseAll: (keys) => set({ expanded: Object.fromEntries(keys.map((k) => [k, false])) }),
   panelZoom: loadPanel().zoom,
   setScope: (scope) => set({ scope }),
   setView: (view) => set({ view }),

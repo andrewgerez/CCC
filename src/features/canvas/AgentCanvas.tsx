@@ -1,6 +1,6 @@
 import "@xyflow/react/dist/style.css";
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useReactFlow, type Node } from "@xyflow/react";
-import { Lock, Maximize2, Minus, Plug, Plus, Search, Settings } from "lucide-react";
+import { ChevronsLeft, Lock, Maximize2, Minus, Plug, Plus, Search, Settings } from "lucide-react";
 import phone from "../../assets/claudes/phone.gif";
 import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -102,14 +102,20 @@ function Summary({ account }: { account: AccountId }) {
   );
 }
 
-function ZoomControls() {
+function ZoomControls({ foldKeys }: { foldKeys: string[] }) {
   const rf = useReactFlow();
+  const collapseAll = useUi((s) => s.collapseAll);
   const btn = "grid size-8 place-items-center rounded-full text-fg-2 hover:bg-surface-3";
   return (
     <div className={cn(float, "absolute bottom-4 right-4 z-10 flex items-center gap-0.5 p-1")}>
       <button className={btn} aria-label="Afastar" onClick={() => void rf.zoomOut({ duration: 200 })}><Minus className="size-4" /></button>
       <button className={btn} aria-label="Aproximar" onClick={() => void rf.zoomIn({ duration: 200 })}><Plus className="size-4" /></button>
       <button className={btn} aria-label="Enquadrar" onClick={() => void rf.fitView({ padding: 0.15, duration: 250, maxZoom: 1 })}><Maximize2 className="size-3.5" /></button>
+      {foldKeys.length > 0 && (
+        <button className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12.5px] font-medium text-fg-2 hover:bg-surface-3" title="Recolher os agentes de todas as sessões" onClick={() => collapseAll(foldKeys)}>
+          <ChevronsLeft className="size-4" />Recolher tudo
+        </button>
+      )}
     </div>
   );
 }
@@ -172,7 +178,8 @@ function Inner() {
     }
   }, [account, sessions, agents, loadDetail]);
 
-  const graph = useMemo(() => buildCanvas(account, sessions, agents), [account, sessions, agents]);
+  const expanded = useUi((s) => s.expanded);
+  const graph = useMemo(() => buildCanvas(account, sessions, agents, Date.now(), expanded), [account, sessions, agents, expanded]);
 
   const rf = useReactFlow();
   const lastKey = useRef("");
@@ -186,7 +193,8 @@ function Inner() {
   const onNodeClick = (_: unknown, n: Node<CardData>) => {
     const d = n.data;
     if (d.kind === "session") openSession(d.session.id, "chat");
-    else openSession(d.agent.sessionId, "agents", d.agent.id);
+    else if (d.kind === "agent") openSession(d.agent.sessionId, "agents", d.agent.id);
+    else useUi.getState().setExpanded(d.key, true);
   };
 
   return (
@@ -240,7 +248,7 @@ function Inner() {
           className="enter"
         >
           <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color={account === "personal" ? "#cdd6c8" : "#d6d1c5"} />
-          <ZoomControls />
+          <ZoomControls foldKeys={graph.foldKeys} />
         </ReactFlow>
       )}
     </div>

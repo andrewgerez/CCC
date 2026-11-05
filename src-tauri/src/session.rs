@@ -32,6 +32,7 @@ pub enum Cmd {
     Stop,
     SetPriority(i32),
     SetMode(crate::accounts::PermissionMode),
+    SetModel(Option<String>),
 }
 
 #[derive(Clone)]
@@ -150,6 +151,7 @@ impl Actor {
                     Some(Cmd::Send(t)) => prompts.push(t),
                     Some(Cmd::SetPriority(p)) => { self.s.priority = p; sched.set_priority(&sid, p); self.persist().await; }
                     Some(Cmd::SetMode(m)) => { self.s.permission_mode = m; self.persist().await; }
+                    Some(Cmd::SetModel(m)) => { self.s.model = m; self.persist().await; }
                     Some(Cmd::Stop) | None => {
                         self.set_status(SessionStatus::Idle, Some("removida da fila".into())).await;
                         return Exit::Done;
@@ -404,6 +406,14 @@ impl Actor {
                         if stdin.is_some() && !stopping {
                             write_line(&mut stdin, protocol::set_permission_mode(&uuid::Uuid::new_v4().to_string(), m.cli_value())).await;
                             self.system("info", format!("Modo de permissão: {}", m.cli_value())).await;
+                        }
+                    }
+                    Some(Cmd::SetModel(m)) => {
+                        self.s.model = m.clone();
+                        self.persist().await;
+                        if stdin.is_some() && !stopping {
+                            write_line(&mut stdin, protocol::set_model(&uuid::Uuid::new_v4().to_string(), m.as_deref())).await;
+                            self.system("info", format!("Modelo: {}", m.as_deref().unwrap_or("padrão"))).await;
                         }
                     }
                     Some(Cmd::Stop) | None => {

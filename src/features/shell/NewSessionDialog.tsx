@@ -10,6 +10,7 @@ import { ACCOUNT_LABEL, cn, errMessage } from "../../lib/utils";
 import { useData } from "../../store/data";
 import { useUi } from "../../store/ui";
 import { ModeToggle } from "./ModeToggle";
+import { ModelPicker } from "./ModelPicker";
 
 const LOOSE = "__repo__";
 const lastKey = (a: AccountId) => `ccc.lastProject.${a}`;
@@ -159,10 +160,8 @@ export function NewSessionDialog() {
           </div>
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2"><Label htmlFor="ns-title">Título (opcional)</Label><Input id="ns-title" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-            <div><Label htmlFor="ns-model">Modelo</Label>
-              <Select id="ns-model" value={model} onChange={(e) => setModel(e.target.value)}>
-                <option value="">Padrão</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option>
-              </Select>
+            <div className="col-span-2"><Label>Modelo</Label>
+              <div className="flex h-8 items-center"><ModelPicker value={model} onChange={setModel} /></div>
             </div>
             <div><Label htmlFor="ns-prio">Prioridade</Label><Input id="ns-prio" type="number" min={0} max={9} value={priority} onChange={(e) => setPriority(Number(e.target.value) || 0)} /></div>
           </div>

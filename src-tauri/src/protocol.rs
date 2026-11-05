@@ -227,6 +227,10 @@ pub fn user_message(text: &str) -> Value {
             "message": { "role": "user", "content": text } })
 }
 
+pub fn set_model(request_id: &str, model: Option<&str>) -> Value {
+    json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "set_model", "model": model } })
+}
+
 pub fn set_permission_mode(request_id: &str, mode: &str) -> Value {
     json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "set_permission_mode", "mode": mode } })
 }
@@ -354,6 +358,13 @@ mod tests {
     fn outbound_messages_shape() {
         let init = initialize("i1");
         assert_eq!(init["request"]["subtype"], "initialize");
+        let m = set_model("m1", Some("opus"));
+        assert_eq!((m["type"].as_str(), m["request"]["subtype"].as_str(), m["request"]["model"].as_str()), (Some("control_request"), Some("set_model"), Some("opus")));
+        assert!(set_model("m2", None)["request"]["model"].is_null());
+        let pm = set_permission_mode("p1", "default");
+        assert_eq!(pm["request"]["mode"], "default");
+        assert!(crate::commands::valid_model("claude-opus-4-1[1m]") && crate::commands::valid_model("sonnet"));
+        assert!(!crate::commands::valid_model("opus; rm -rf") && !crate::commands::valid_model(""));
         assert!(init["request"]["hooks"]["SubagentStart"].is_array());
         let allow = permission_allow(&json!({"a":1}), Some(&json!([])));
         assert!(allow.get("updatedPermissions").is_none());

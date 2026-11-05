@@ -1,11 +1,11 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Layers, X } from "lucide-react";
 import { memo, useState, type MouseEvent } from "react";
 import { api } from "../../lib/api";
 import type { SessionSummary } from "../../lib/contract";
 import { AGENT_STATUS_LABEL, SESSION_STATUS_LABEL, cn, errMessage, fmtRelative } from "../../lib/utils";
 import { useUi, type PanelTab } from "../../store/ui";
-import { CARD, type AgentCardData, type SessionCardData } from "./build";
+import { CARD, type AgentCardData, type Fold, type GroupCardData, type SessionCardData } from "./build";
 import { ACTIVITY_LABEL, ClaudeMascot, agentMascot, sessionMascot } from "./ClaudeMascot";
 
 const DELETABLE: SessionSummary["status"][] = ["archived", "idle", "error", "interrupted", "blocked"];
@@ -34,6 +34,62 @@ function Action({ label, tab, sessionId, primary }: { label: string; tab: PanelT
     </button>
   );
 }
+
+/** Pill on a card to fold/unfold the agents under it. */
+function FoldButton({ fold }: { fold: Fold }) {
+  const toggle = (e: MouseEvent) => {
+    e.stopPropagation();
+    useUi.getState().setExpanded(fold.key, !fold.open);
+  };
+  return (
+    <button
+      onClick={toggle}
+      title={fold.open ? "Recolher agentes" : "Mostrar agentes"}
+      className="nodrag absolute -bottom-3 right-4 z-10 flex h-6 items-center gap-0.5 rounded-full bg-surface pl-1.5 pr-2 text-[11px] font-semibold text-fg-2 shadow-[0_0_0_1px_var(--color-line-2),0_2px_6px_-2px_rgb(40_30_10/0.2)] hover:text-fg"
+    >
+      {fold.open ? <ChevronLeft className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+      {fold.total}
+    </button>
+  );
+}
+
+const COUNT_LABEL: [keyof GroupCardData["counts"], string, string][] = [
+  ["need", "precisam de você", "bg-fg"],
+  ["error", "com erro", "bg-red"],
+  ["run", "trabalhando", "bg-claude"],
+  ["idle", "parados", "bg-dim"],
+  ["done", "concluídos", "bg-green"],
+];
+
+/** Stack standing in for hidden agents; clicking it unfolds them. */
+export const GroupCard = memo(function GroupCard({ data }: NodeProps & { data: GroupCardData }) {
+  const open = (e: MouseEvent) => {
+    e.stopPropagation();
+    useUi.getState().setExpanded(data.key, true);
+  };
+  const parts = COUNT_LABEL.filter(([k]) => data.counts[k] > 0);
+  return (
+    <div style={{ width: CARD.group.w }} className="relative cursor-pointer" onClick={open}>
+      {handles}
+      <div aria-hidden className="absolute inset-x-3 -bottom-2 h-full rounded-[15px] bg-surface shadow-[0_0_0_1px_var(--color-line)]" />
+      <div aria-hidden className="absolute inset-x-1.5 -bottom-1 h-full rounded-[15px] bg-surface shadow-[0_0_0_1px_var(--color-line)]" />
+      <div className="canvas-card relative rounded-[15px] bg-surface px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="grid size-[34px] shrink-0 place-items-center rounded-[11px] bg-surface-3 text-fg-2"><Layers className="size-4" /></div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">{data.total} {data.reason === "finished" ? (data.total === 1 ? "concluído" : "concluídos") : data.total === 1 ? "agente" : "agentes"}</div>
+            <div className="text-xs text-muted">{data.reason === "finished" ? "recolhidos" : "recolhidos · clique para abrir"}</div>
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-2.5 gap-y-1 text-[11.5px] text-fg-2">
+          {parts.map(([k, label, dot]) => (
+            <span key={k} className="flex items-center gap-1"><span className={cn("size-1.5 rounded-full", dot)} />{data.counts[k]} {label}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 function DeleteButton({ s }: { s: SessionSummary }) {
   const [confirm, setConfirm] = useState(false);
@@ -80,6 +136,7 @@ export const SessionCard = memo(function SessionCard({ data }: NodeProps & { dat
       className={cn("canvas-card group relative cursor-pointer rounded-[18px] bg-surface p-3.5", state, selected && "sel", (state === "done" || state === "idle") && "opacity-[.86]")}
     >
       {handles}
+      {data.fold && <FoldButton fold={data.fold} />}
       <DeleteButton s={s} />
       <div className="flex items-center gap-3">
         <ClaudeMascot state={state} activity={data.activity} />
@@ -88,6 +145,7 @@ export const SessionCard = memo(function SessionCard({ data }: NodeProps & { dat
           <div className="truncate text-xs text-muted">
             {s.repoName}
             {data.subagents > 0 && <span> · {data.subagents} {data.subagents === 1 ? "agente" : "agentes"}</span>}
+            {s.model && <span> · {s.model}</span>}
             <span> · {s.permissionMode === "auto" ? "auto" : "pergunta"}</span>
           </div>
         </div>
@@ -125,7 +183,7 @@ export const AgentCard = memo(function AgentCard({ data }: NodeProps & { data: A
   return (
     <div
       style={{ width: CARD.agent.w, minHeight: 80 }}
-      className={cn("canvas-card cursor-pointer rounded-[15px] bg-surface px-3 py-2.5", state, selected && "sel", state === "done" && "opacity-[.86]")}
+      className={cn("canvas-card relative cursor-pointer rounded-[15px] bg-surface px-3 py-2.5", state, selected && "sel", state === "done" && "opacity-[.86]")}
     >
       {handles}
       <div className="flex items-center gap-2.5">
@@ -136,8 +194,9 @@ export const AgentCard = memo(function AgentCard({ data }: NodeProps & { data: A
         </div>
       </div>
       <div className="mt-2 truncate font-mono text-[12px] text-fg-2">{line}</div>
+      {data.fold && <FoldButton fold={data.fold} />}
     </div>
   );
 });
 
-export const cardTypes = { session: SessionCard, agent: AgentCard };
+export const cardTypes = { session: SessionCard, agent: AgentCard, fold: GroupCard };
