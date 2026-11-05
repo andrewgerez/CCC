@@ -6,7 +6,7 @@ Linux only for now (Tauri 2 + React + Rust, sandboxed with Landlock). The UI is 
 
 ## What it does
 
-- **Canvas**: one card per Claude Code session, with its subagents as connected cards. Cards show live state: working, using a tool, waiting on subagents, needs you, finished (flag-waving Claude), idle or error.
+- **Canvas**: one card per Claude Code session, with its subagents as connected cards. Cards show live state: working, waiting on subagents, needs you, finished (flag-waving Claude), idle or error.
 - **Two accounts, never mixed**: a switch at the top (or `Tab`) flips between *Trabalho* and *Pessoal*. Each account has its own `CLAUDE_CONFIG_DIR`, workspace, database and sandbox. The other account shows a badge when something there needs you.
 - **Approvals in the app**: when Claude asks to edit or run something, you approve or deny it from the card or the side panel.
 - **Auto / Ask**: per session, let Claude Code's auto mode handle routine actions or ask before acting. You can switch it while a session runs.
