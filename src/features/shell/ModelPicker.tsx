@@ -1,4 +1,6 @@
+import type { AccountId } from "../../lib/contract";
 import { cn } from "../../lib/utils";
+import { useData } from "../../store/data";
 
 export const MODELS: { id: string; label: string; hint: string }[] = [
   { id: "", label: "Padrão", hint: "Modelo padrão da conta / do Claude Code" },
@@ -7,10 +9,30 @@ export const MODELS: { id: string; label: string; hint: string }[] = [
   { id: "haiku", label: "Haiku", hint: "Mais rápido e econômico" },
 ];
 
-/** Segmented model switch; "" = default. Unknown values (full model ids) show as a fifth pill. */
-export function ModelPicker({ value, onChange, className }: { value: string | null; onChange: (m: string) => void; className?: string }) {
+/** Human name for a model alias or id: "opus[1m]" → "Opus 1M", "claude-sonnet-4-5-20250929" → "Sonnet 4.5". */
+export function modelLabel(m: string): string {
+  const ctx = /\[1m\]$/i.test(m) ? " 1M" : "";
+  const base = m.replace(/\[.*\]$/, "");
+  const full = /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d))?(?:-\d{8})?$/.exec(base);
+  const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
+  if (full) return `${cap(full[1])} ${full[2]}${full[3] ? `.${full[3]}` : ""}${ctx}`;
+  if (/^(opus|sonnet|haiku|default|opusplan)$/i.test(base)) return `${cap(base)}${ctx}`;
+  return m;
+}
+
+/** Segmented model switch; "" = default. Unknown values (full model ids) show as a fifth pill.
+ *  With `account`, the "Padrão" pill names what the default resolves to. */
+export function ModelPicker({ value, onChange, account, className }: { value: string | null; onChange: (m: string) => void; account?: AccountId; className?: string }) {
   const v = value ?? "";
-  const options = MODELS.some((m) => m.id === v) ? MODELS : [...MODELS, { id: v, label: v, hint: v }];
+  const def = useData((s) => (account ? s.overview?.accounts.find((a) => a.config.id === account)?.defaultModel ?? null : undefined));
+  const base = MODELS.map((m) =>
+    m.id !== "" || def === undefined
+      ? m
+      : def
+        ? { ...m, label: `Padrão · ${modelLabel(def)}`, hint: `Padrão desta conta: ${def}` }
+        : { ...m, hint: "Sem modelo fixo: o Claude Code escolhe conforme o plano da conta" },
+  );
+  const options = base.some((m) => m.id === v) ? base : [...base, { id: v, label: modelLabel(v), hint: v }];
   return (
     <div role="radiogroup" aria-label="Modelo" className={cn("inline-flex flex-wrap rounded-full bg-surface-3 p-0.5", className)}>
       {options.map((m) => {

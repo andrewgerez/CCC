@@ -246,6 +246,7 @@ impl AppState {
                         auth: self.cached_auth(*id),
                         warnings: warnings.iter().filter(|w| w.starts_with(id.as_str())).cloned().collect(),
                         workspace_exists: config.workspace_root.is_dir(),
+                        default_model: config.default_model.clone().or_else(|| settings_model(&config.config_dir)),
                         config,
                     }
                 })
@@ -310,4 +311,11 @@ pub fn snapshot(st: &AppState, sampler: &mut crate::metrics::Sampler, me: i64) -
     let app = sampler.sample(&[me]);
     let wv = sampler.sample(&webview);
     MetricsSnapshot { ts: now_ms(), app, webview_rss_bytes: wv.rss_bytes, sessions, scheduler: st.scheduler.view() }
+}
+
+/// `model` from a Claude Code config dir's settings.json, if set.
+fn settings_model(config_dir: &std::path::Path) -> Option<String> {
+    let raw = std::fs::read_to_string(config_dir.join("settings.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("model")?.as_str().map(str::trim).filter(|m| !m.is_empty() && m.len() < 100).map(String::from)
 }

@@ -150,7 +150,7 @@ index 3f1a2b9..8c0d4e1 100644
 function overview(): Overview {
   return {
     accounts: accounts.map((c) => ({
-      config: c, auth: auth[c.id], workspaceExists: true,
+      config: c, auth: auth[c.id], workspaceExists: true, defaultModel: c.id === "work" ? "opus[1m]" : null,
       warnings: c.id === "work" ? ["~/.claude é o diretório padrão global; não use para contas isoladas"].slice(0, 0) : [],
     })),
     settings, landlockAbi: 8, claudePath: `${HOME}/.local/share/claude/versions/2.1.318`, claudeVersion: "2.1.318", configError: null,

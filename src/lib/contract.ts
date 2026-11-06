@@ -133,6 +133,8 @@ export interface AccountView {
   auth: AuthStatus;
   warnings: string[];
   workspaceExists: boolean;
+  /** Model used when none is picked; null = decided by the account's plan. */
+  defaultModel?: string | null;
 }
 
 export interface Overview {

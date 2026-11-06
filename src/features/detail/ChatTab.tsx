@@ -30,6 +30,12 @@ export function ChatTab({ session }: { session: SessionSummary }) {
     return r;
   }, [items, streamIds, truncated]);
 
+  // Sent messages, oldest first, for ↑/↓ recall in the composer.
+  const history = useMemo(
+    () => (items ?? []).flatMap((it) => (it.body.kind === "user_text" && it.body.text.trim() ? [it.body.text] : [])),
+    [items],
+  );
+
   const parentRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -41,9 +47,19 @@ export function ChatTab({ session }: { session: SessionSummary }) {
     getItemKey: (i) => rows[i].key,
   });
 
+  /** Row heights are estimates until measured, so a single scroll can land short:
+   *  keep snapping to the real bottom for a few frames while rows get measured. */
+  const scrollToBottom = (frames = 8) => {
+    const el = parentRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    if (frames > 0) requestAnimationFrame(() => atBottom.current && scrollToBottom(frames - 1));
+  };
+
   useLayoutEffect(() => {
-    if (atBottom.current && rows.length) v.scrollToIndex(rows.length - 1, { align: "end" });
-  }, [rows.length, v]);
+    if (atBottom.current && rows.length) scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
 
   // Streaming text grows the last row; keep pinned to bottom while streaming.
   const streamTick = useData((s) => {
@@ -67,6 +83,7 @@ export function ChatTab({ session }: { session: SessionSummary }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={parentRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-auto px-4" role="log" aria-label="Conversa">
         {rows.length === 0 && <div className="py-16 text-center text-xs text-muted">Sem mensagens ainda.</div>}
         <div style={{ height: v.getTotalSize(), position: "relative" }}>
@@ -90,13 +107,15 @@ export function ChatTab({ session }: { session: SessionSummary }) {
       </div>
       {showJump && (
         <button
-          onClick={() => { atBottom.current = true; v.scrollToIndex(rows.length - 1, { align: "end" }); setShowJump(false); }}
-          className="mx-auto -mt-10 mb-2 flex items-center gap-1 rounded-full border border-line-2 bg-surface-3 px-3 py-1 text-[11px] text-fg-2 shadow-lg"
+          type="button"
+          onClick={() => { atBottom.current = true; setShowJump(false); scrollToBottom(); }}
+          className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-fg px-3.5 py-1.5 text-[12px] font-medium text-bg shadow-[0_4px_14px_rgb(0_0_0/0.25)] transition-transform hover:scale-105"
         >
-          <ArrowDown className="size-3" /> Mais recentes
+          <ArrowDown className="size-3.5" /> Mais recentes
         </button>
       )}
-      <Composer session={session} />
+      </div>
+      <Composer session={session} history={history} />
     </div>
   );
 }
@@ -200,8 +219,42 @@ const ChatRow = memo(function ChatRow({ item, sessionId }: { item: ChatItem; ses
   }
 });
 
-function Composer({ session }: { session: SessionSummary }) {
+/** Shell-style recall: ↑ on the first line walks back through sent messages, ↓ on the last line
+ *  walks forward and finally restores the unsent draft. Returns true when it handled the key. */
+function useHistoryRecall(history: string[], text: string, setText: (t: string) => void) {
+  const pos = useRef<number | null>(null); // index into history while browsing
+  const draft = useRef("");
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !history.length) return false;
+    const el = e.currentTarget;
+    if (el.selectionStart !== el.selectionEnd) return false;
+    const caret = el.selectionStart;
+    const place = (t: string, atEnd: boolean) => {
+      setText(t);
+      requestAnimationFrame(() => { const at = atEnd ? t.length : 0; el.setSelectionRange(at, at); });
+    };
+    if (e.key === "ArrowUp" && !text.slice(0, caret).includes("\n")) {
+      if (pos.current === null) { draft.current = text; pos.current = history.length; }
+      if (pos.current === 0) return true;
+      pos.current -= 1;
+      place(history[pos.current], true);
+      return true;
+    }
+    if (e.key === "ArrowDown" && pos.current !== null && !text.slice(caret).includes("\n")) {
+      pos.current += 1;
+      if (pos.current >= history.length) { pos.current = null; place(draft.current, true); }
+      else place(history[pos.current], true);
+      return true;
+    }
+    return false;
+  };
+  const reset = () => { pos.current = null; };
+  return { onKey, reset };
+}
+
+function Composer({ session, history }: { session: SessionSummary; history: string[] }) {
   const [text, setText] = useState("");
+  const recall = useHistoryRecall(history, text, setText);
   const pasted = usePastedImages();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -221,6 +274,7 @@ function Composer({ session }: { session: SessionSummary }) {
     try {
       await api.sendMessage(session.account, session.id, t, images, thumbs);
       setText("");
+      recall.reset();
       pasted.clear();
     } catch (e) { setErr(errMessage(e)); } finally { setBusy(false); }
   };
@@ -229,10 +283,13 @@ function Composer({ session }: { session: SessionSummary }) {
       <div className="rounded-xl border border-line-2 bg-bg-2 focus-within:border-cyan/50 focus-within:ring-2 focus-within:ring-cyan/10">
         <Textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); recall.reset(); }}
           onPaste={pasted.onPaste}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-          placeholder={blocked ? "Sessão indisponível" : "Mensagem para o Claude…  (Enter envia · Shift+Enter quebra linha)"}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); return; }
+            if (recall.onKey(e)) e.preventDefault();
+          }}
+          placeholder={blocked ? "Sessão indisponível" : "Mensagem para o Claude…  (Enter envia · Shift+Enter quebra linha · ↑ mensagens anteriores)"}
           disabled={blocked}
           rows={3}
           aria-label="Mensagem"

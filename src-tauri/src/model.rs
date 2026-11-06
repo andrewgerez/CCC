@@ -282,6 +282,9 @@ pub struct AccountView {
     pub auth: AuthStatus,
     pub warnings: Vec<String>,
     pub workspace_exists: bool,
+    /// Model a session gets when none is picked: ccc's account default, else the
+    /// `model` in the account's Claude Code settings.json. None = decided by the plan.
+    pub default_model: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

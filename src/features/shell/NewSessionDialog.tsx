@@ -165,7 +165,7 @@ export function NewSessionDialog() {
           <div className="grid grid-cols-4 gap-3">
             <div className="col-span-2"><Label htmlFor="ns-title">Título (opcional)</Label><Input id="ns-title" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
             <div className="col-span-2"><Label>Modelo</Label>
-              <div className="flex h-8 items-center"><ModelPicker value={model} onChange={setModel} /></div>
+              <div className="flex h-8 items-center"><ModelPicker account={account} value={model} onChange={setModel} /></div>
             </div>
             <div><Label htmlFor="ns-prio">Prioridade</Label><Input id="ns-prio" type="number" min={0} max={9} value={priority} onChange={(e) => setPriority(Number(e.target.value) || 0)} /></div>
           </div>

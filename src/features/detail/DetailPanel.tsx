@@ -107,7 +107,7 @@ function PanelHeader({ session: s }: { session: SessionSummary }) {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted">
         <span>Modelo</span>
-        <ModelPicker value={s.model} onChange={(m) => act(() => api.setSessionModel(s.account, s.id, m || null))} />
+        <ModelPicker account={s.account} value={s.model} onChange={(m) => act(() => api.setSessionModel(s.account, s.id, m || null))} />
       </div>
       <div className="mt-2 flex items-center gap-2 text-[12px] text-muted">
         <span>Permissões</span>
