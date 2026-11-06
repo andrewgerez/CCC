@@ -335,7 +335,7 @@ async function handle(cmd: string, a: Args): Promise<unknown> {
       return filtered.slice(-(a.limit as number));
     }
     case "update_settings": Object.assign(settings, a.settings); return overview();
-    case "inspect_behavior_dir": return { exists: true, skills: ["code-review", "deploy", "monday-task"], hasClaudeMd: true, isPlugin: false, agents: 2, commands: 0 };
+    case "inspect_behavior_dir": return { exists: true, skills: ["code-review", "deploy", "triage-issue"], hasClaudeMd: true, isPlugin: false, agents: 2, commands: 0 };
     case "update_account": { const c = a.config as AccountConfig; const i = accounts.findIndex((x) => x.id === c.id); accounts[i] = c; return overview(); }
     case "get_metrics": return metrics();
     case "set_ui_visible": return null;

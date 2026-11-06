@@ -6,9 +6,9 @@ import { setZoom, stepZoom, storedZoom } from "../../lib/zoom";
 
 const LIST: [string[], string][] = [
   [["Ctrl", "K"], "Buscar projetos e sessões"],
-  [["Tab"], "Alternar Trabalho / Pessoal · PJ"],
+  [["Tab"], "Alternar Trabalho / Pessoal"],
   [["1"], "Conta Trabalho"],
-  [["2"], "Conta Pessoal · PJ"],
+  [["2"], "Conta Pessoal"],
   [["G"], "Voltar ao quadro"],
   [["N"], "Nova tarefa"],
   [["Esc"], "Fechar painel"],
